@@ -156,9 +156,9 @@ describe("fluxos completos do novo planejamento", () => {
     const user = userEvent.setup();
     render(<App />);
     await user.click(screen.getByRole("button", { name: "Adicionar fatura" }));
-    await user.type(
+    await user.selectOptions(
       screen.getByLabelText("Identificação do cartão"),
-      "Cartão Azul",
+      "Nubank",
     );
     fireEvent.change(screen.getByLabelText("Competência da fatura"), {
       target: { value: addMonths(current, -1) },
@@ -170,7 +170,7 @@ describe("fluxos completos do novo planejamento", () => {
     expect(screen.getByText("Vencida · pendente")).toBeTruthy();
     await user.click(
       screen.getByRole("button", {
-        name: `Reagendar Cartão Azul ${addMonths(current, -1)}`,
+        name: `Reagendar Nubank ${addMonths(current, -1)}`,
       }),
     );
     fireEvent.change(screen.getByLabelText("Nova competência"), {
@@ -193,19 +193,63 @@ describe("fluxos completos do novo planejamento", () => {
     const doc = changeEntity(
       createDocument(defaults),
       "invoice",
-      { id: "i", card: "Cartão", month: current, amount: 100, status: "open" },
+      { id: "i", card: "Nubank", month: current, amount: 100, status: "open" },
       current,
-      "Cartão",
+      "Nubank",
     );
     localStorage.setItem(STORAGE_KEY, JSON.stringify(doc));
     render(<App />);
     await user.click(screen.getByRole("button", { name: "Adicionar fatura" }));
-    await user.type(screen.getByLabelText("Identificação do cartão"), "Cartão");
+    await user.selectOptions(
+      screen.getByLabelText("Identificação do cartão"),
+      "Nubank",
+    );
     await user.click(screen.getByRole("button", { name: "Salvar fatura" }));
     expect(
       within(screen.getByRole("dialog")).getByRole("alert").textContent,
     ).toContain("Já existe uma fatura");
     expect(currentState().invoices).toHaveLength(1);
+  });
+  it("preserva a identificação antiga ao editar somente o valor da fatura", async () => {
+    const user = userEvent.setup();
+    const doc = changeEntity(
+      createDocument(defaults),
+      "invoice",
+      {
+        id: "old",
+        card: "Meu cartão antigo",
+        month: current,
+        amount: 100,
+        status: "open",
+      },
+      current,
+      "Meu cartão antigo",
+    );
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(doc));
+    render(<App />);
+    await user.click(
+      screen.getByRole("button", {
+        name: `Editar fatura Meu cartão antigo ${current}`,
+      }),
+    );
+    expect(
+      (screen.getByLabelText("Identificação do cartão") as HTMLSelectElement)
+        .value,
+    ).toBe("Meu cartão antigo");
+    fireEvent.change(screen.getByLabelText("Valor da fatura"), {
+      target: { value: "150" },
+    });
+    await user.click(screen.getByRole("button", { name: "Salvar fatura" }));
+    expect(currentState().invoices![0]).toMatchObject({
+      id: "old",
+      card: "Meu cartão antigo",
+      amount: 150,
+    });
+    expect(
+      stored()
+        .history.at(-1)!
+        .fields.map((f) => f.field),
+    ).toEqual(["amount"]);
   });
   it("migra v1 sem descartar a cópia antiga e registra somente o estado inicial conhecido", () => {
     const legacy = {

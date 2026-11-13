@@ -590,6 +590,20 @@ function LoanForm({
   );
 }
 
+const CARD_BANKS = [
+  "Inter",
+  "Itaú",
+  "Nubank",
+  "C6 Bank",
+  "Caixa",
+  "Bradesco",
+  "Santander",
+  "PicPay",
+  "Banco do Brasil",
+  "Neon",
+  "Outros",
+];
+
 function InvoiceForm({
   value,
   current,
@@ -606,6 +620,20 @@ function InvoiceForm({
   onSave: (invoice: Invoice) => void;
 }) {
   const [draft, setDraft] = useState(value);
+  const selectedBank =
+    CARD_BANKS.find(
+      (bank) =>
+        bank.toLocaleLowerCase("pt-BR") ===
+        draft.card.toLocaleLowerCase("pt-BR"),
+    ) ?? draft.card;
+  const previousIdentification =
+    exists &&
+    value.card &&
+    !CARD_BANKS.some(
+      (bank) =>
+        bank.toLocaleLowerCase("pt-BR") ===
+        value.card.toLocaleLowerCase("pt-BR"),
+    );
   return (
     <Modal title={exists ? "Editar fatura" : "Nova fatura"} onClose={onClose}>
       <form
@@ -616,13 +644,26 @@ function InvoiceForm({
       >
         <label className="field">
           Identificação do cartão
-          <input
+          <select
             autoFocus
             required
-            maxLength={80}
-            value={draft.card}
+            value={selectedBank}
             onChange={(e) => setDraft({ ...draft, card: e.target.value })}
-          />
+          >
+            <option value="" disabled>
+              Selecione um banco
+            </option>
+            {previousIdentification && (
+              <option value={value.card}>
+                {value.card} (identificação anterior)
+              </option>
+            )}
+            {CARD_BANKS.map((bank) => (
+              <option key={bank} value={bank}>
+                {bank}
+              </option>
+            ))}
+          </select>
         </label>
         <MonthField
           label="Competência da fatura"

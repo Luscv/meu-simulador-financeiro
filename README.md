@@ -21,11 +21,11 @@ npm run preview
 
 ## GitHub Pages
 
-1. Envie o conteúdo deste projeto para um repositório chamado `meu-simulador-financeiro`, na branch `main`.
-2. Em **Settings → Pages → Build and deployment → Source**, escolha **GitHub Actions**.
-3. O workflow `.github/workflows/pages.yml` testa, compila e publica cada push na `main`. Também aceita execução manual.
+- Repositório: [Luscv/meu-simulador-financeiro](https://github.com/Luscv/meu-simulador-financeiro).
+- Endereço do site: [luscv.github.io/meu-simulador-financeiro](https://luscv.github.io/meu-simulador-financeiro/).
+- Fonte de publicação: **GitHub Actions**, em **Settings → Pages → Build and deployment**.
 
-Endereço esperado: `https://<usuario>.github.io/meu-simulador-financeiro/`. O `base` do Vite já usa esse subdiretório. Não é necessário configurar segredos. A publicação efetiva depende de um repositório GitHub; este ambiente começou sem checkout ou remote.
+O workflow `.github/workflows/pages.yml` testa, compila e publica cada push na `main`. Também aceita execução manual em **Actions → Publicar no GitHub Pages → Run workflow**. O `base` do Vite já usa o subdiretório correto. Não é necessário configurar segredos.
 
 ## Premissas principais
 

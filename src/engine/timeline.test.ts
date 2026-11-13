@@ -9,7 +9,7 @@ import {
   STORAGE_KEY,
 } from "../data";
 import { addMonths, monthDate } from "./calendar";
-import { emergencyTarget, project } from "./calculate";
+import { emergencyTarget, project, projectionMonths } from "./calculate";
 import {
   changeEntity,
   changeSettings,
@@ -56,6 +56,98 @@ function addLoan(doc: PlanDocument, value = loan()) {
 }
 const rows = (doc: PlanDocument, count = 12, month = origin) =>
   project(doc, count, monthDate(month));
+
+describe("receitas únicas e período salarial", () => {
+  it.each(["2026-10", "2026-12"])(
+    "corrigir a competência para %s move a única entrada e preserva o histórico",
+    (month) => {
+      const extra = {
+        id: "sale",
+        name: "Venda",
+        amount: 1000,
+        recurrence: "once" as const,
+        month: origin,
+      };
+      const created = changeEntity(plan(), "extra", extra, origin, extra.name);
+      const corrected = changeEntity(
+        created,
+        "extra",
+        { ...extra, month },
+        month,
+        extra.name,
+      );
+      const result = rows(corrected, 4, "2026-10");
+      expect(
+        result
+          .filter((m) => m.extras > 0)
+          .map((m) => [m.date.slice(0, 7), m.extras]),
+      ).toEqual([[month, 1000]]);
+      expect(
+        corrected.history
+          .filter((c) => c.target === "extra")
+          .map((c) => c.action),
+      ).toEqual(["create", "edit"]);
+      expect(corrected.history.at(-1)!.before).toEqual(extra);
+      const imported = parseImport(exportData(corrected)).document;
+      expect(rows(imported, 4, "2026-10")).toEqual(result);
+      expect(rows(corrected, 2, "2027-01").every((m) => m.extras === 0)).toBe(
+        true,
+      );
+    },
+  );
+  it("encerrar antes da entrada única cancela somente essa receita", () => {
+    const extra = {
+      id: "sale",
+      name: "Venda",
+      amount: 1000,
+      recurrence: "once" as const,
+      month: "2026-12",
+    };
+    const created = changeEntity(
+      plan(),
+      "extra",
+      extra,
+      extra.month,
+      extra.name,
+    );
+    const closed = changeEntity(
+      created,
+      "extra",
+      null,
+      origin,
+      extra.name,
+      extra.id,
+    );
+    expect(rows(closed).every((m) => m.extras === 0)).toBe(true);
+    expect(closed.history.at(-1)!.action).toBe("close");
+  });
+  it("estende o período até o fim de etapas confirmadas com validade futura", () => {
+    const original = plan({
+      mode: "projection",
+      projectionStart: origin,
+      stages: [
+        { id: "a", gross: 4000, regime: "CLT", duration: 1, unit: "years" },
+      ],
+    });
+    const revised = changeSettings(
+      original,
+      {
+        stages: [
+          { id: "b", gross: 6000, regime: "PJ", duration: 2, unit: "years" },
+        ],
+      },
+      "2027-01",
+    );
+    expect(projectionMonths(revised, origin)).toBe(26);
+    const result = project(revised, undefined, monthDate(origin));
+    expect(result).toHaveLength(26);
+    expect(result.at(-1)!.date).toBe("2028-12-01");
+    expect(
+      result.filter((m) => m.salaryStageStart).map((m) => m.index),
+    ).toEqual([0, 2]);
+    expect(result[2].payroll.regime).toBe("PJ");
+  });
+});
 
 describe("meta de emergência", () => {
   it.each([6, 8, 12] as const)("usa 30 dias fixos e %s meses", (months) => {

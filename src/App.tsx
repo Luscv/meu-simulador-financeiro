@@ -36,13 +36,18 @@ import {
   Segment,
   Toggle,
 } from "./components";
-import { housing, project } from "./engine/calculate";
+import {
+  housing,
+  payroll,
+  project,
+  projectionMonths,
+} from "./engine/calculate";
 import { RULES, SOURCES } from "./engine/rules";
 import type { Extra } from "./engine/types";
 import { brl, monthLabel, percent } from "./format";
 import { HORIZONS, useCurrentMonth, useSimulation } from "./state";
 import { monthDate } from "./engine/calendar";
-import { changeEntity } from "./engine/timeline";
+import { catalog, changeEntity, snapshotAt } from "./engine/timeline";
 import {
   CloseForm,
   DataTransfer,
@@ -72,7 +77,7 @@ function ExtraEditor({
   onClose: () => void;
 }) {
   const [draft, setDraft] = useState(value);
-  const [validFrom, setValidFrom] = useState(current);
+  const [validFrom, setValidFrom] = useState(value.month ?? current);
   return (
     <Modal
       title={value.name ? "Editar receita extra" : "Nova receita extra"}
@@ -81,8 +86,17 @@ function ExtraEditor({
       <form
         onSubmit={(e) => {
           e.preventDefault();
-          if (draft.name.trim())
-            onSave({ ...draft, name: draft.name.trim() }, validFrom);
+          if (draft.name.trim()) {
+            const { month: _month, ...extra } = draft;
+            onSave(
+              {
+                ...extra,
+                name: draft.name.trim(),
+                ...(draft.recurrence === "once" ? { month: validFrom } : {}),
+              },
+              validFrom,
+            );
+          }
         }}
       >
         <label className="field">
@@ -115,13 +129,24 @@ function ExtraEditor({
             <option value="monthly">Mensal</option>
             <option value="semiannual">Semestral</option>
             <option value="annual">Anual</option>
+            <option value="once">Única</option>
           </select>
         </label>
         <MonthField
-          label="Alteração válida a partir de"
+          label={
+            draft.recurrence === "once"
+              ? "Competência da entrada única"
+              : "Alteração válida a partir de"
+          }
           value={validFrom}
           onChange={setValidFrom}
         />
+        {draft.recurrence === "once" && (
+          <p className="small muted">
+            Soma à renda da projeção e à reserva apenas nesta competência, sem
+            repetição.
+          </p>
+        )}
         <ValidityNote month={validFrom} current={current} />
         <div className="modal-actions">
           <button type="button" className="button secondary" onClick={onClose}>
@@ -149,11 +174,21 @@ export default function App() {
     storageOk,
   } = workspace;
   const start = useMemo(() => monthDate(currentMonth), [currentMonth]);
-  const allRows = useMemo(
-    () => project(preview, Math.max(12, s.horizon), start),
-    [preview, s.horizon, start],
+  const salaryStart =
+    snapshotAt(preview, workspace.effectiveMonth).projectionStart ??
+    currentMonth;
+  const period = useMemo(
+    () =>
+      s.mode === "projection"
+        ? projectionMonths(preview, currentMonth)
+        : s.horizon,
+    [preview, currentMonth, s.mode, s.horizon],
   );
-  const rows = allRows.slice(0, s.horizon),
+  const allRows = useMemo(
+    () => project(preview, Math.max(12, period), start),
+    [preview, period, start],
+  );
+  const rows = allRows.slice(0, period),
     first = rows[0],
     last = rows.at(-1)!,
     p = first.payroll;
@@ -161,7 +196,23 @@ export default function App() {
   const annualReserve = annualRows.reduce((sum, m) => sum + m.budget, 0);
   const annualVariable = annualRows.reduce((sum, m) => sum + m.variable, 0);
   const home = useMemo(() => housing(s.home, last.fgts), [s.home, last.fgts]);
-  const horizon = HORIZONS.find((h) => h.value === s.horizon)!.label;
+  const horizon =
+    s.mode === "projection"
+      ? `${period} ${period === 1 ? "mês" : "meses"}`
+      : HORIZONS.find((h) => h.value === s.horizon)!.label;
+  const extras = useMemo(() => {
+    const entries = new Map(s.extras.map((e) => [e.id, e]));
+    for (const e of catalog<Extra>(preview, "extra")) {
+      if (
+        e.recurrence === "once" &&
+        e.month &&
+        e.month > currentMonth &&
+        snapshotAt(preview, e.month).extras.some((item) => item.id === e.id)
+      )
+        entries.set(e.id, e);
+    }
+    return [...entries.values()];
+  }, [s.extras, preview, currentMonth]);
   const [editingExtra, setEditingExtra] = useState<Extra | null>(null);
   const [closingExtra, setClosingExtra] = useState<Extra | null>(null);
   const [active, setActive] = useState("visao-geral");
@@ -308,20 +359,29 @@ export default function App() {
                   },
                 ]}
               />
-              <label className="horizon-select">
-                <span>Projetar por</span>
-                <select
-                  aria-label="Horizonte da projeção"
-                  value={s.horizon}
-                  onChange={(e) => update("horizon", Number(e.target.value))}
-                >
-                  {HORIZONS.map((h) => (
-                    <option key={h.value} value={h.value}>
-                      {h.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              {s.mode === "projection" ? (
+                <div className="horizon-select automatic-horizon">
+                  <span>Período automático</span>
+                  <strong aria-label="Período automático da projeção">
+                    {horizon}
+                  </strong>
+                </div>
+              ) : (
+                <label className="horizon-select">
+                  <span>Projetar por</span>
+                  <select
+                    aria-label="Horizonte da projeção"
+                    value={s.horizon}
+                    onChange={(e) => update("horizon", Number(e.target.value))}
+                  >
+                    {HORIZONS.map((h) => (
+                      <option key={h.value} value={h.value}>
+                        {h.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
             </div>
             <DataTransfer
               document={plan}
@@ -508,107 +568,127 @@ export default function App() {
                   <>
                     <p className="muted small">
                       Etapas consecutivas. Início salvo:{" "}
-                      {monthLabel(`${s.projectionStart ?? currentMonth}-01`)}.
+                      {monthLabel(`${salaryStart}-01`)}.
                     </p>
                     <div className="stages">
-                      {s.stages.map((stage, i) => (
-                        <div className="stage" key={stage.id}>
-                          <div className="stage-heading">
-                            <strong>
-                              <span>{String(i + 1).padStart(2, "0")}</span>Etapa{" "}
-                              {i + 1}
-                            </strong>
-                            <button
-                              type="button"
-                              className="icon-button"
-                              aria-label={`Remover etapa ${i + 1}`}
-                              disabled={s.stages.length === 1}
-                              onClick={() =>
-                                update(
-                                  "stages",
-                                  s.stages.filter((x) => x.id !== stage.id),
-                                )
-                              }
-                            >
-                              <Trash2 size={14} />
-                            </button>
-                          </div>
-                          <NumberField
-                            label={
-                              stage.regime === "CLT"
-                                ? `Salário bruto · etapa ${i + 1}`
-                                : `Faturamento PJ · etapa ${i + 1}`
-                            }
-                            value={stage.gross}
-                            onChange={(gross) =>
-                              update(
-                                "stages",
-                                s.stages.map((x) =>
-                                  x.id === stage.id ? { ...x, gross } : x,
-                                ),
-                              )
-                            }
-                          />
-                          <Segment
-                            label={`Regime · etapa ${i + 1}`}
-                            value={stage.regime}
-                            options={regimeOptions}
-                            onChange={(regime) =>
-                              update(
-                                "stages",
-                                s.stages.map((x) =>
-                                  x.id === stage.id ? { ...x, regime } : x,
-                                ),
-                              )
-                            }
-                          />
-                          <div className="duration-fields">
+                      {s.stages.map((stage, i) => {
+                        const net = payroll(stage);
+                        return (
+                          <div className="stage" key={stage.id}>
+                            <div className="stage-heading">
+                              <strong>
+                                <span>{String(i + 1).padStart(2, "0")}</span>
+                                Etapa {i + 1}
+                              </strong>
+                              <button
+                                type="button"
+                                className="icon-button"
+                                aria-label={`Remover etapa ${i + 1}`}
+                                disabled={s.stages.length === 1}
+                                onClick={() =>
+                                  update(
+                                    "stages",
+                                    s.stages.filter((x) => x.id !== stage.id),
+                                  )
+                                }
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            </div>
                             <NumberField
-                              label={`Duração · etapa ${i + 1}`}
-                              value={stage.duration}
-                              min={1}
-                              max={600}
-                              step="1"
-                              money={false}
-                              onChange={(duration) =>
+                              label={
+                                stage.regime === "CLT"
+                                  ? `Salário bruto · etapa ${i + 1}`
+                                  : `Faturamento PJ · etapa ${i + 1}`
+                              }
+                              value={stage.gross}
+                              onChange={(gross) =>
                                 update(
                                   "stages",
                                   s.stages.map((x) =>
-                                    x.id === stage.id
-                                      ? { ...x, duration: Math.round(duration) }
-                                      : x,
+                                    x.id === stage.id ? { ...x, gross } : x,
                                   ),
                                 )
                               }
                             />
-                            <label className="field">
-                              Unidade
-                              <select
-                                aria-label={`Unidade · etapa ${i + 1}`}
-                                value={stage.unit}
-                                onChange={(e) =>
+                            <Segment
+                              label={`Regime · etapa ${i + 1}`}
+                              value={stage.regime}
+                              options={regimeOptions}
+                              onChange={(regime) =>
+                                update(
+                                  "stages",
+                                  s.stages.map((x) =>
+                                    x.id === stage.id ? { ...x, regime } : x,
+                                  ),
+                                )
+                              }
+                            />
+                            <div className="stage-net">
+                              <span>
+                                {stage.regime === "CLT"
+                                  ? "Salário líquido estimado"
+                                  : "Disponível PJ estimado"}
+                              </span>
+                              <output
+                                aria-label={`Líquido estimado · etapa ${i + 1}`}
+                              >
+                                {net.supported
+                                  ? brl(net.available)
+                                  : "Fora do cenário PJ"}
+                              </output>
+                            </div>
+                            <div className="duration-fields">
+                              <NumberField
+                                label={`Duração · etapa ${i + 1}`}
+                                value={stage.duration}
+                                min={1}
+                                max={600}
+                                step="1"
+                                money={false}
+                                onChange={(duration) =>
                                   update(
                                     "stages",
                                     s.stages.map((x) =>
                                       x.id === stage.id
                                         ? {
                                             ...x,
-                                            unit: e.target.value as
-                                              | "months"
-                                              | "years",
+                                            duration: Math.round(duration),
                                           }
                                         : x,
                                     ),
                                   )
                                 }
-                              >
-                                <option value="months">Meses</option>
-                                <option value="years">Anos</option>
-                              </select>
-                            </label>
+                              />
+                              <label className="field">
+                                Unidade
+                                <select
+                                  aria-label={`Unidade · etapa ${i + 1}`}
+                                  value={stage.unit}
+                                  onChange={(e) =>
+                                    update(
+                                      "stages",
+                                      s.stages.map((x) =>
+                                        x.id === stage.id
+                                          ? {
+                                              ...x,
+                                              unit: e.target.value as
+                                                | "months"
+                                                | "years",
+                                            }
+                                          : x,
+                                      ),
+                                    )
+                                  }
+                                >
+                                  <option value="months">Meses</option>
+                                  <option value="years">Anos</option>
+                                </select>
+                              </label>
+                            </div>
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                     <button
                       type="button"
@@ -630,7 +710,8 @@ export default function App() {
                       Adicionar etapa
                     </button>
                     <p className="small muted">
-                      Depois das etapas, a última renda e regime continuam.
+                      O período da projeção acompanha o fim da última etapa. As
+                      marcações no gráfico indicam o início de cada emprego.
                     </p>
                   </>
                 )}
@@ -913,9 +994,9 @@ export default function App() {
                   Adicionar receita
                 </button>
               </div>
-              {s.extras.length ? (
+              {extras.length ? (
                 <div className="extras-list">
-                  {s.extras.map((e) => (
+                  {extras.map((e) => (
                     <div className="extra-row" key={e.id}>
                       <span className="soft-icon">
                         <Plus size={16} />
@@ -928,6 +1009,7 @@ export default function App() {
                               monthly: "Mensal",
                               semiannual: "Semestral",
                               annual: "Anual",
+                              once: `Única · ${e.month ? monthLabel(`${e.month}-01`) : ""}`,
                             }[e.recurrence]
                           }
                         </small>
@@ -1125,7 +1207,9 @@ export default function App() {
               <p>
                 Extras mensais entram todos os meses; semestrais no 6º, 12º,
                 18º… mês; anuais no 12º, 24º… mês da projeção. O ciclo começa
-                neste mês, sem calendário de pagamentos.
+                neste mês, sem calendário de pagamentos. Receitas únicas entram
+                somente na competência informada, somando à renda total e ao
+                saldo investido uma única vez.
               </p>
               <p>
                 CLT: acumulamos mensalmente 1/12 do 13º líquido e 1/12 do

@@ -166,6 +166,29 @@ export function snapshotAt(document: PlanDocument, month: string): Simulation {
     } else invoices.set(change.itemId, clone(change.after) as Invoice);
   }
   result.invoices = [...invoices.values()];
+  // A one-off extra is one dated entry, including when its date is corrected.
+  // Keep recurring versions by validity, but never count old and new dates twice.
+  const uniqueExtras = new Map(
+    document.baseline.extras
+      .filter((e) => e.recurrence === "once")
+      .map((e) => [e.id, e]),
+  );
+  for (const change of document.history.filter((c) => c.target === "extra")) {
+    const extra = change.after as Extra | null;
+    if (extra?.recurrence === "once") uniqueExtras.set(change.itemId, extra);
+    else {
+      const previous = uniqueExtras.get(change.itemId);
+      if (previous?.month && change.effectiveMonth! <= previous.month)
+        uniqueExtras.delete(change.itemId);
+    }
+  }
+  result.extras = result.extras.flatMap((e) =>
+    e.recurrence !== "once"
+      ? [e]
+      : uniqueExtras.has(e.id)
+        ? [clone(uniqueExtras.get(e.id)!)]
+        : [],
+  );
   return result;
 }
 
@@ -208,7 +231,8 @@ export function changeEntity(
 ): PlanDocument {
   const before =
     entityAt(document, kind, id, effectiveMonth) ??
-    (value === null
+    (value === null ||
+    (kind === "extra" && "recurrence" in value && value.recurrence === "once")
       ? (catalog(document, kind).find((item) => item.id === id) ?? null)
       : null);
   return appendChange(document, {

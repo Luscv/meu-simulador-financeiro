@@ -14,6 +14,23 @@ import { changeEntity, changeSettings, snapshotAt } from "./engine/timeline";
 const now = new Date("2026-11-13T12:00:00.000Z");
 const doc = () => createDocument(defaults, now);
 describe("formato JSON validado e migração", () => {
+  it("exporta e importa receitas únicas com competência e rejeita datas ausentes ou inválidas", () => {
+    const value = doc();
+    value.baseline.extras = [
+      {
+        id: "sale",
+        name: "Venda",
+        amount: 1000,
+        recurrence: "once",
+        month: "2027-01",
+      },
+    ];
+    expect(parseImport(exportData(value)).document).toEqual(value);
+    delete value.baseline.extras[0].month;
+    expect(() => validateDocument(value)).toThrow("Arquivo inválido");
+    value.baseline.extras[0].month = "2027-13";
+    expect(() => validateDocument(value)).toThrow("Arquivo inválido");
+  });
   it("migra todos os dados antigos sem inventar alterações anteriores", () => {
     const legacy = {
       ...structuredClone(defaults),

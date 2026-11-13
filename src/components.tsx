@@ -298,11 +298,13 @@ export function EvolutionChart({
 }) {
   const id = useId().replace(/:/g, "");
   const [hover, setHover] = useState<number | null>(null);
+  const [stageHover, setStageHover] = useState<number | null>(null);
+  const stages = rows.filter((row) => row.salaryStageStart);
   const width = 820,
     height = 250,
     left = 65,
     right = 18,
-    top = 20,
+    top = stages.length ? 32 : 20,
     bottom = 32;
   const values = [initial, ...rows.map((r) => (wealth ? r.wealth : r.balance))];
   const max = Math.max(...values, 1000) * 1.14;
@@ -314,6 +316,7 @@ export function EvolutionChart({
   const line = path(values),
     area = `${line} L${x(rows.length)},${y(0)} L${left},${y(0)} Z`;
   const selected = hover !== null && hover > 0 ? rows[hover - 1] : null;
+  const selectedStage = stageHover !== null ? rows[stageHover] : null;
   return (
     <div className="chart-container">
       <svg
@@ -436,9 +439,72 @@ export function EvolutionChart({
             </circle>
           </g>
         ))}
+        {stages.map((row) => {
+          const label = `Início do emprego ${row.salaryStage} · ${monthLabel(row.date)} · ${row.payroll.regime === "CLT" ? "Líquido" : "Disponível PJ"}: ${brl(row.income)}`;
+          return (
+            <g
+              key={row.index}
+              className="salary-marker"
+              role="img"
+              aria-label={label}
+              tabIndex={0}
+              onMouseEnter={() => setStageHover(row.index)}
+              onMouseLeave={() => setStageHover(null)}
+              onFocus={() => setStageHover(row.index)}
+              onBlur={() => setStageHover(null)}
+              onTouchStart={() => setStageHover(row.index)}
+            >
+              <title>{label}</title>
+              <line
+                x1={x(row.index)}
+                x2={x(row.index)}
+                y1={top}
+                y2={height - bottom}
+                stroke="#b18a50"
+                strokeDasharray="3 5"
+                strokeOpacity=".6"
+              />
+              <text
+                x={x(row.index)}
+                y={17}
+                textAnchor={row.index === 0 ? "start" : "middle"}
+                fill="#8d6834"
+                fontSize="11"
+                fontWeight="600"
+              >
+                E{row.salaryStage}
+              </text>
+              <circle
+                cx={x(row.index)}
+                cy={y(values[row.index])}
+                r="6"
+                fill="#b18a50"
+                stroke="white"
+                strokeWidth="2"
+              />
+              <circle
+                cx={x(row.index)}
+                cy={y(values[row.index])}
+                r="13"
+                fill="transparent"
+              />
+            </g>
+          );
+        })}
       </svg>
       <div className="chart-tooltip" aria-live="polite">
-        {selected ? (
+        {selectedStage ? (
+          <>
+            Emprego {selectedStage.salaryStage} ·{" "}
+            {monthLabel(selectedStage.date)}{" "}
+            <strong>
+              {selectedStage.payroll.regime === "CLT"
+                ? "Líquido"
+                : "Disponível PJ"}
+              : {brl(selectedStage.income)}
+            </strong>
+          </>
+        ) : selected ? (
           <>
             {monthLabel(selected.date)}{" "}
             <strong>{brl(wealth ? selected.wealth : selected.balance)}</strong>
@@ -458,6 +524,11 @@ export function EvolutionChart({
           </>
         )}
       </div>
+      {stages.length > 0 && (
+        <p className="chart-stage-legend">
+          <span className="legend-dot gold" /> Início de cada emprego · E1, E2…
+        </p>
+      )}
     </div>
   );
 }

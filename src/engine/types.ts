@@ -51,7 +51,8 @@ export interface Extra {
   id: string;
   name: string;
   amount: number;
-  recurrence: "monthly" | "semiannual" | "annual";
+  recurrence: "monthly" | "semiannual" | "annual" | "once";
+  month?: string;
 }
 export interface Home {
   mode: "mcmv" | "standard";
@@ -152,6 +153,8 @@ export interface Month {
   date: string;
   days: number;
   payroll: Payroll;
+  salaryStage: number | null;
+  salaryStageStart: boolean;
   income: number;
   fixed: number;
   variable: number;

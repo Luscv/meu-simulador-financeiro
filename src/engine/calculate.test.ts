@@ -6,6 +6,7 @@ import {
   money,
   payroll,
   project,
+  projectionMonths,
   salaryAt,
 } from "./calculate";
 import { defaults } from "../state";
@@ -99,6 +100,88 @@ describe("cenário PJ", () => {
 });
 
 describe("um único motor mensal", () => {
+  it("inclui receita única somente na competência salva, sem reiniciar ao avançar o calendário", () => {
+    const s = scenario({
+      salary: { gross: 0, regime: "CLT" },
+      extras: [
+        {
+          id: "one",
+          name: "Venda",
+          amount: 1000,
+          recurrence: "once",
+          month: "2026-12",
+        },
+        { id: "monthly", name: "Mensal", amount: 50, recurrence: "monthly" },
+      ],
+    });
+    const result = project(s, 14, start);
+    expect(result.map((m) => m.extras)).toEqual([
+      50,
+      1050,
+      ...Array(12).fill(50),
+    ]);
+    expect(result.at(-1)!.totalExtras).toBe(1700);
+    expect(result.at(-1)!.balance).toBe(1700);
+    expect(project(s, 2, new Date(2027, 0, 1)).map((m) => m.extras)).toEqual([
+      50, 50,
+    ]);
+  });
+  it("seis empregos anuais geram 72 meses e seis marcações, mesmo sem mudança no salário", () => {
+    const s = scenario({
+      mode: "projection",
+      projectionStart: "2026-11",
+      stages: Array.from({ length: 6 }, (_, i) => ({
+        id: `job-${i}`,
+        gross: 6000,
+        regime: "CLT",
+        duration: 1,
+        unit: "years",
+      })),
+    });
+    expect(projectionMonths(s, "2026-11")).toBe(72);
+    const result = project(s, undefined, start);
+    expect(result).toHaveLength(72);
+    expect(result.at(-1)!.date).toBe("2032-10-01");
+    expect(
+      result
+        .filter((m) => m.salaryStageStart)
+        .map((m) => [m.index, m.salaryStage]),
+    ).toEqual([
+      [0, 1],
+      [12, 2],
+      [24, 3],
+      [36, 4],
+      [48, 5],
+      [60, 6],
+    ]);
+    expect(projectionMonths(s, "2027-11")).toBe(60);
+    expect(project(s, undefined, new Date(2027, 10, 1))).toHaveLength(60);
+  });
+  it("combina durações em meses e anos e mantém o período manual no salário atual", () => {
+    const s = scenario({
+      mode: "projection",
+      stages: [
+        { id: "a", gross: 4000, regime: "CLT", duration: 1, unit: "months" },
+        { id: "b", gross: 6000, regime: "PJ", duration: 1, unit: "years" },
+        { id: "c", gross: 7000, regime: "CLT", duration: 2, unit: "months" },
+      ],
+    });
+    const result = project(s, undefined, start);
+    expect(result).toHaveLength(15);
+    expect(
+      result.filter((m) => m.salaryStageStart).map((m) => m.index),
+    ).toEqual([0, 1, 13]);
+    expect(result[1].income).toBe(payroll(s.stages[1]).available);
+    const current = project(
+      { ...s, mode: "current", horizon: 6 },
+      undefined,
+      start,
+    );
+    expect(current).toHaveLength(6);
+    expect(
+      current.every((m) => m.salaryStage === null && !m.salaryStageStart),
+    ).toBe(true);
+  });
   it("troca salário e regime no mês correto e mantém a última etapa", () => {
     const s = scenario({
       mode: "projection",

@@ -104,8 +104,14 @@ function validateEntity(target: string, x: unknown) {
       addMonths(x.firstMonth as string, (x.installments as number) - 1)
     )
       invalid("fim do empréstimo incompatível com as parcelas");
-  } else if (target === "extra")
-    oneOf(x.recurrence, ["monthly", "semiannual", "annual"], "recorrência");
+  } else if (target === "extra") {
+    oneOf(
+      x.recurrence,
+      ["monthly", "semiannual", "annual", "once"],
+      "recorrência",
+    );
+    if (x.recurrence === "once" || x.month !== undefined) month(x.month);
+  }
 }
 function validateValue(target: ChangeTarget, x: unknown) {
   if (target in COLLECTIONS) {

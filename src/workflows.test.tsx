@@ -17,7 +17,8 @@ import {
 import { defaults } from "./legacy";
 import { addMonths, monthDate, monthKey } from "./engine/calendar";
 import { changeEntity, obligations, snapshotAt } from "./engine/timeline";
-import { project } from "./engine/calculate";
+import { payroll, project } from "./engine/calculate";
+import { brl } from "./format";
 import type { Invoice, PlanDocument } from "./engine/types";
 
 const current = monthKey();
@@ -36,6 +37,118 @@ afterEach(() => {
 });
 
 describe("fluxos completos do novo planejamento", () => {
+  it("salva uma receita única futura, permite corrigir o mês e restaura sem repetir a entrada", async () => {
+    const user = userEvent.setup();
+    const view = render(<App />);
+    await user.click(screen.getByRole("button", { name: "Adicionar receita" }));
+    await user.type(
+      screen.getByLabelText("Nome da receita"),
+      "Venda de equipamento",
+    );
+    fireEvent.change(screen.getByLabelText("Valor líquido"), {
+      target: { value: "1000" },
+    });
+    await user.selectOptions(screen.getByLabelText("Recorrência"), "once");
+    expect(
+      (
+        screen.getByLabelText(
+          "Competência da entrada única",
+        ) as HTMLInputElement
+      ).value,
+    ).toBe(current);
+    fireEvent.change(screen.getByLabelText("Competência da entrada única"), {
+      target: { value: addMonths(current, 1) },
+    });
+    await user.click(screen.getByRole("button", { name: "Salvar receita" }));
+    expect(screen.getByText("Venda de equipamento")).toBeTruthy();
+    expect(
+      project(stored(), 4, monthDate(current)).map((m) => m.extras),
+    ).toEqual([0, 1000, 0, 0]);
+    await user.click(
+      screen.getByRole("button", { name: "Editar Venda de equipamento" }),
+    );
+    expect(
+      (
+        screen.getByLabelText(
+          "Competência da entrada única",
+        ) as HTMLInputElement
+      ).value,
+    ).toBe(addMonths(current, 1));
+    fireEvent.change(screen.getByLabelText("Competência da entrada única"), {
+      target: { value: addMonths(current, 2) },
+    });
+    await user.click(screen.getByRole("button", { name: "Salvar receita" }));
+    const result = project(stored(), 4, monthDate(current));
+    expect(result.map((m) => m.extras)).toEqual([0, 0, 1000, 0]);
+    expect(stored().history.filter((c) => c.target === "extra")).toHaveLength(
+      2,
+    );
+    view.unmount();
+    render(<App />);
+    expect(screen.getByText("Venda de equipamento")).toBeTruthy();
+    expect(project(stored(), 4, monthDate(current))).toEqual(result);
+  });
+  it("mostra seis marcações anuais, período automático e líquido por emprego, atualizando após edição", async () => {
+    const user = userEvent.setup();
+    const doc = createDocument({
+      ...structuredClone(defaults),
+      mode: "projection",
+      projectionStart: current,
+      horizon: 6,
+      stages: Array.from({ length: 6 }, (_, i) => ({
+        id: `job-${i}`,
+        gross: 6000,
+        regime: i % 2 ? "PJ" : "CLT",
+        duration: 1,
+        unit: "years",
+      })),
+    });
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(doc));
+    render(<App />);
+    expect(
+      screen.getByLabelText("Período automático da projeção").textContent,
+    ).toBe("72 meses");
+    expect(screen.queryByLabelText("Horizonte da projeção")).toBeNull();
+    const chart = screen.getByRole("img", {
+      name: /^Evolução do saldo investido;/,
+    });
+    expect(
+      within(chart).getAllByRole("img", { name: /^Início do emprego/ }),
+    ).toHaveLength(6);
+    expect(
+      within(
+        screen.getByRole("region", { name: "Tabela mensal dos investimentos" }),
+      ).getAllByRole("row"),
+    ).toHaveLength(73);
+    for (const [i, stage] of doc.baseline.stages.entries())
+      expect(
+        screen.getByLabelText(`Líquido estimado · etapa ${i + 1}`).textContent,
+      ).toBe(brl(payroll(stage).available));
+
+    fireEvent.change(screen.getByLabelText("Duração · etapa 6"), {
+      target: { value: "2" },
+    });
+    expect(
+      screen.getByLabelText("Período automático da projeção").textContent,
+    ).toBe("84 meses");
+    fireEvent.change(screen.getByLabelText("Salário bruto · etapa 1"), {
+      target: { value: "10000" },
+    });
+    expect(
+      screen.getByLabelText("Líquido estimado · etapa 1").textContent,
+    ).toBe(brl(payroll({ gross: 10000, regime: "CLT" }).available));
+    await user.click(
+      screen.getByRole("button", { name: "Aplicar alterações" }),
+    );
+    await user.click(screen.getByRole("button", { name: "Salário atual" }));
+    expect(
+      (screen.getByLabelText("Horizonte da projeção") as HTMLSelectElement)
+        .value,
+    ).toBe("6");
+    expect(
+      screen.queryAllByRole("img", { name: /^Início do emprego/ }),
+    ).toHaveLength(0);
+  });
   it("digitar várias vezes gera prévia; salvar confirma uma edição completa e descartar não altera os dados", async () => {
     const user = userEvent.setup();
     render(<App />);

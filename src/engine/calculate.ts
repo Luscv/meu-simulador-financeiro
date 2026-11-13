@@ -6,8 +6,9 @@ import type {
   Salary,
   Simulation,
   PlanDocument,
+  Stage,
 } from "./types";
-import { monthDistance, monthKey } from "./calendar";
+import { addMonths, monthDistance, monthKey } from "./calendar";
 import { activeExpenses, obligations, snapshotAt } from "./timeline";
 
 export const money = (value: number) =>
@@ -110,16 +111,58 @@ export function payroll(salary: Salary): Payroll {
   return p;
 }
 
-export function salaryAt(s: Simulation, index: number): Salary {
-  if (s.mode === "current" || s.stages.length === 0) return s.salary;
+export const stageMonths = (stage: Stage) =>
+  Math.max(1, Math.round(stage.duration)) * (stage.unit === "years" ? 12 : 1);
+
+function stageAt(s: Simulation, index: number) {
+  if (s.mode === "current" || s.stages.length === 0) return null;
   let end = 0;
-  for (const stage of s.stages) {
-    end +=
-      Math.max(1, Math.round(stage.duration)) *
-      (stage.unit === "years" ? 12 : 1);
-    if (index < end) return stage;
+  for (const [i, stage] of s.stages.entries()) {
+    const start = end;
+    end += stageMonths(stage);
+    if (index < end || i === s.stages.length - 1)
+      return { stage, number: i + 1, start };
   }
-  return s.stages.at(-1)!;
+  return null;
+}
+
+export function salaryAt(s: Simulation, index: number): Salary {
+  return stageAt(s, index)?.stage ?? s.salary;
+}
+
+export function projectionMonths(
+  source: Simulation | PlanDocument,
+  start: string,
+) {
+  const document = "baseline" in source ? source : null;
+  const settingsAt = (month: string) =>
+    document ? snapshotAt(document, month) : (source as Simulation);
+  const dates = [
+    start,
+    ...new Set(
+      document?.history
+        .filter(
+          (c) =>
+            ["mode", "stages", "projectionStart"].includes(c.target) &&
+            c.effectiveMonth !== null &&
+            c.effectiveMonth > start,
+        )
+        .map((c) => c.effectiveMonth!) ?? [],
+    ),
+  ].sort();
+  let end: string | null = null;
+  for (const month of dates) {
+    const s = settingsAt(month);
+    if (s.mode === "projection")
+      end = addMonths(
+        s.projectionStart ?? month,
+        s.stages.reduce((sum, stage) => sum + stageMonths(stage), 0),
+      );
+    else if (end && month < end) end = month;
+  }
+  return end
+    ? Math.max(1, monthDistance(start, end))
+    : settingsAt(start).horizon;
 }
 
 export function project(
@@ -131,7 +174,10 @@ export function project(
   const firstSettings = document
     ? snapshotAt(document, monthKey(start))
     : (source as Simulation);
-  count ??= firstSettings.horizon;
+  count ??=
+    firstSettings.mode === "projection"
+      ? projectionMonths(source, monthKey(start))
+      : firstSettings.horizon;
   const schedule = obligations(
     document ?? {
       version: 2,
@@ -177,7 +223,8 @@ export function project(
     const salaryIndex = s.projectionStart
       ? Math.max(0, monthDistance(s.projectionStart, month))
       : index;
-    const p = payroll(salaryAt(s, salaryIndex));
+    const stage = stageAt(s, salaryIndex);
+    const p = payroll(stage?.stage ?? s.salary);
     const fixed = money(
       activeExpenses(s, month).reduce(
         (total, e) => total + positive(e.amount),
@@ -212,15 +259,14 @@ export function project(
       pending13 = pendingVacation = pendingPj13 = pendingPjVacation = 0;
     }
     const extras = money(
-      s.extras.reduce(
-        (sum, e) =>
-          sum +
-          (e.recurrence === "monthly" ||
-          (index + 1) % (e.recurrence === "semiannual" ? 6 : 12) === 0
-            ? positive(e.amount)
-            : 0),
-        0,
-      ),
+      s.extras.reduce((sum, e) => {
+        const due =
+          e.recurrence === "once"
+            ? e.month === month
+            : e.recurrence === "monthly" ||
+              (index + 1) % (e.recurrence === "semiannual" ? 6 : 12) === 0;
+        return sum + (due ? positive(e.amount) : 0);
+      }, 0),
     );
     const interest = money(balance * rate);
     const contribution = Math.max(0, budget);
@@ -248,6 +294,8 @@ export function project(
       date: `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-01`,
       days,
       payroll: p,
+      salaryStage: stage?.number ?? null,
+      salaryStageStart: stage !== null && salaryIndex === stage.start,
       income: p.available,
       fixed,
       variable,

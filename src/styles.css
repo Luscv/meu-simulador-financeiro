@@ -405,6 +405,15 @@ h1 span {
   padding: 10px 33px 10px 12px;
   color: #44573f;
 }
+.automatic-horizon strong {
+  border: 1px solid #dfe5da;
+  border-radius: 6px;
+  padding: 10px 12px;
+  color: #44573f;
+  background: #fff;
+  font-weight: 500;
+  white-space: nowrap;
+}
 .metrics-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -570,17 +579,30 @@ h1 span {
   overflow: visible;
 }
 .chart-tooltip {
-  height: 26px;
+  min-height: 26px;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 7px;
+  flex-wrap: wrap;
   color: #8a9682;
   font-size: 10px;
   margin-top: 2px;
 }
 .chart-tooltip strong {
   color: #3d6548;
+}
+.chart-stage-legend {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 8px;
+  font-size: 10px;
+  color: #8d6834;
+}
+.salary-marker {
+  cursor: pointer;
 }
 .chart-footer {
   border-top: 1px solid #eef0e9;
@@ -1662,6 +1684,21 @@ h1 span {
 }
 .stage .segment {
   margin-bottom: 12px;
+}
+.stage-net {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 14px;
+  color: #6d8659;
+  font-size: 10px;
+}
+.stage-net output {
+  color: #3d6548;
+  font-size: 12px;
+  font-weight: 600;
 }
 .duration-fields {
   display: grid;

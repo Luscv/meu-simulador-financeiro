@@ -27,6 +27,26 @@ npm run preview
 
 O workflow `.github/workflows/pages.yml` testa, compila e publica cada push na `main`. Também aceita execução manual em **Actions → Publicar no GitHub Pages → Run workflow**. O `base` do Vite já usa o subdiretório correto. Não é necessário configurar segredos.
 
+## Vigências, dívidas e histórico
+
+- **Reserva de emergência:** escolha 6, 8 ou 12 meses. A meta usa os gastos fixos ativos no mês atual + gasto diário × **30 dias fixos**. É uma meta do patrimônio e não outro desconto dos aportes.
+- **Gastos fixos:** sem prazo ou com primeira cobrança e quantidade de mensalidades, incluindo a primeira. O fim é calculado e salvo. Encerrar retira cobranças a partir da competência escolhida e mantém as versões anteriores consultáveis.
+- **Empréstimos:** consignado ou pessoal, parcela conhecida, primeira competência e parcelas restantes. Cada mês sai uma única vez do orçamento, fora dos descontos tributários do salário. “Total das parcelas pendentes” inclui vencidas e futuras não confirmadas, e não representa quitação antecipada.
+- **Cartões:** uma fatura por cartão/competência, com valor e situação. A fatura não se repete; evite cadastrar de novo o que já está nos fixos ou variáveis.
+- **Pagamentos:** o calendário nunca marca uma obrigação como paga. Confirmar pagamento muda somente a situação, sem apagar a despesa prevista ou criar outro desembolso. Reagendar move aquela única pendência e registra o mês anterior e o novo.
+- **Edições:** os campos mostram uma prévia automática. Use **Aplicar alterações**, com validade preenchida no mês atual, para confirmar salário e parâmetros. Formulários de despesas/dívidas confirmam em **Salvar**. O **Histórico de alterações** guarda identificador, registro em data/hora, competência de validade, ação, item e valores anteriores/novos. Não há registro por tecla digitada.
+- **Versões:** editar a partir de março preserva janeiro/fevereiro. Correções retroativas e encerramentos mantêm o histórico. Saldo inicial + aportes + extras/benefícios + rendimentos − retiradas + revisões de saldo informado = saldo final. Revisar um saldo para uma competência futura redefine a referência naquela data; não cria um aporte. Todas as tabelas são projeções recalculáveis, não movimentações realizadas.
+
+As datas de compromissos e do início das etapas salariais ficam salvas: recarregar ou avançar o calendário não reinicia a contagem. A versão antiga é migrada automaticamente para o formato 2, preservando sua cópia no armazenamento e criando um único registro de estado inicial importado. Como o formato anterior não guardava uma data absoluta de início, a referência conhecida é o mês da migração; não inventamos alterações passadas.
+
+## Exportar e importar JSON
+
+1. Confirme ou descarte prévias pendentes. Clique em **Exportar dados** para baixar um `.json` com versão, data de exportação, configurações, versões financeiras, compromissos, pagamentos, reagendamentos e histórico.
+2. No outro navegador/dispositivo, clique em **Importar dados** e escolha esse arquivo.
+3. Confira o resumo e confirme **Substituir dados**. A importação substitui integralmente os dados locais, sem mesclar, e acrescenta um registro de importação ao histórico recebido.
+
+Arquivos com formato, versão, estrutura ou tipos inválidos são recusados antes de modificar o estado. Cancelar a confirmação também preserva os dados existentes. Só há transferência manual por JSON; não existe sincronização externa. O histórico é local e consultável, sem garantia de inviolabilidade.
+
 ## Premissas principais
 
 - Referência das regras: **13/11/2026**. Fontes oficiais consultadas durante o desenvolvimento em [SOURCES.md](SOURCES.md). Anos futuros mantêm essas regras, sem reajustes presumidos.
@@ -41,10 +61,10 @@ O workflow `.github/workflows/pages.yml` testa, compila e publica cada push na `
 - MCMV: taxas e limites de 2026. Para baixa renda, teto local comum conservador de Contagem (R$ 255 mil; BH: R$ 270 mil). Acima dele, opção sem subsídio até R$ 400 mil, a 7,66% nominais a.a., nos termos do art. 20, § 5º, da Resolução 702. Renda até R$ 9.600: imóvel até R$ 400 mil; até R$ 13 mil: até R$ 600 mil. Cotas de 80% nas faixas 1–3 e 60% no usado da Classe Média no Sudeste.
 - Padrão: referência SBPE a partir de 10,99% efetivos a.a., cota SAC de 80%, limitado ao SFH (R$ 2,25 milhões). TR = zero em ambas as modalidades. Sem ITBI, seguros, tarifas ou despesas adicionais. Não representa proposta ou aprovação de crédito.
 
-Cada seção tem um bloco expansível **Como calculamos**. Os parâmetros ficam em `src/engine/rules.ts`, os cálculos em `src/engine/calculate.ts` e o estado validado em `src/state.ts`.
+Cada seção tem um bloco expansível **Como calculamos**. As regras tributárias ficam em `src/engine/rules.ts`; `calculate.ts` contém o motor mensal, `timeline.ts` resolve versões/obrigações por competência, `data.ts` valida e migra os dados e `state.ts` coordena prévias, confirmação e persistência.
 
 ## Validação
 
-Testes automatizados cobrem faixas de INSS/IRRF, transição de salário/regime, dias reais e ano bissexto, totais anuais variáveis, juros e aportes, déficits, provisões, incidências de FGTS, SAC, limites do MCMV, independência da renda imobiliária, edição de listas e restauração do `localStorage`.
+Testes automatizados cobrem as regras financeiras existentes, reserva de emergência, prazos de uma ou várias parcelas na virada do ano, pagamento sem dupla contagem, reagendamento, vigências futuras e retroativas, manutenção de versões, migração, persistência, confirmação de edição e importação/exportação sem perda de dados.
 
 A interface tem grades responsivas, navegação móvel, gráficos SVG sem bibliotecas externas, tabelas com rolagem, rótulos acessíveis, navegação por teclado e diálogos nativos. A revisão visual em navegador real não foi executada neste ambiente: a ferramenta `cua_repl.js` não estava disponível. A interação foi validada em DOM simulado (jsdom).

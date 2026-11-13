@@ -1,5 +1,14 @@
 import { RULES } from "./rules";
-import type { Home, Month, Payroll, Salary, Simulation } from "./types";
+import type {
+  Home,
+  Month,
+  Payroll,
+  Salary,
+  Simulation,
+  PlanDocument,
+} from "./types";
+import { monthDistance, monthKey } from "./calendar";
+import { activeExpenses, obligations, snapshotAt } from "./timeline";
 
 export const money = (value: number) =>
   (Math.sign(value) *
@@ -114,14 +123,29 @@ export function salaryAt(s: Simulation, index: number): Salary {
 }
 
 export function project(
-  s: Simulation,
-  count = s.horizon,
+  source: Simulation | PlanDocument,
+  count?: number,
   start = new Date(),
 ): Month[] {
+  const document = "baseline" in source ? source : null;
+  const firstSettings = document
+    ? snapshotAt(document, monthKey(start))
+    : (source as Simulation);
+  count ??= firstSettings.horizon;
+  const schedule = obligations(
+    document ?? {
+      version: 2,
+      createdAt: start.toISOString(),
+      referenceMonth: monthKey(start),
+      baseline: firstSettings,
+      history: [],
+    },
+  );
   const rows: Month[] = [];
-  const rate = Math.pow(1 + Math.max(-99, s.annualRate) / 100, 1 / 12) - 1;
-  let balance = positive(s.initialBalance),
-    fgts = positive(s.fgts);
+  let balance = positive(firstSettings.initialBalance),
+    fgts = positive(firstSettings.fgts);
+  let previous = firstSettings;
+  let totalBalanceAdjustments = 0;
   let pending13 = 0,
     pendingVacation = 0,
     pendingPj13 = 0,
@@ -131,15 +155,48 @@ export function project(
     totalInterest = 0,
     totalWithdrawals = 0,
     totalUncovered = 0;
-  const fixed = money(
-    s.expenses.reduce((total, e) => total + positive(e.amount), 0),
-  );
   for (let index = 0; index < count; index++) {
     const date = new Date(start.getFullYear(), start.getMonth() + index, 1);
+    const month = monthKey(date);
+    const s = document ? snapshotAt(document, month) : firstSettings;
+    const rate = Math.pow(1 + Math.max(-99, s.annualRate) / 100, 1 / 12) - 1;
+    const balanceAdjustment =
+      index > 0 && s.initialBalance !== previous.initialBalance
+        ? money(s.initialBalance - balance)
+        : 0;
+    const fgtsAdjustment =
+      index > 0 && s.fgts !== previous.fgts ? money(s.fgts - fgts) : 0;
+    balance = money(balance + balanceAdjustment);
+    fgts = money(fgts + fgtsAdjustment);
+    totalBalanceAdjustments = money(
+      totalBalanceAdjustments + balanceAdjustment,
+    );
+    const openingBalance = balance,
+      openingFgts = fgts;
     const days = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
-    const p = payroll(salaryAt(s, index));
+    const salaryIndex = s.projectionStart
+      ? Math.max(0, monthDistance(s.projectionStart, month))
+      : index;
+    const p = payroll(salaryAt(s, salaryIndex));
+    const fixed = money(
+      activeExpenses(s, month).reduce(
+        (total, e) => total + positive(e.amount),
+        0,
+      ),
+    );
+    // Confirmation of payment changes status only, never the dated planned expense.
+    const loans = money(
+      schedule
+        .filter((o) => o.kind === "loan" && o.month === month)
+        .reduce((sum, o) => sum + o.amount, 0),
+    );
+    const invoices = money(
+      schedule
+        .filter((o) => o.kind === "invoice" && o.month === month)
+        .reduce((sum, o) => sum + o.amount, 0),
+    );
     const variable = money(positive(s.daily) * days),
-      spending = money(fixed + variable);
+      spending = money(fixed + variable + loans + invoices);
     const budget = money(p.available - spending);
     pending13 += s.include13 ? p.benefit13 : 0;
     pendingVacation += s.includeVacation ? p.benefitVacation : 0;
@@ -194,6 +251,9 @@ export function project(
       income: p.available,
       fixed,
       variable,
+      daily: positive(s.daily),
+      loans,
+      invoices,
       spending,
       budget,
       extras,
@@ -215,9 +275,25 @@ export function project(
       totalInterest,
       totalWithdrawals,
       totalUncovered,
+      openingBalance,
+      openingFgts,
+      balanceAdjustment,
+      fgtsAdjustment,
+      totalBalanceAdjustments,
     });
+    previous = s;
   }
   return rows;
+}
+
+export function emergencyTarget(
+  fixed: number,
+  daily: number,
+  months: 6 | 8 | 12,
+) {
+  const variable = money(positive(daily) * 30);
+  const reference = money(positive(fixed) + variable);
+  return { fixed, variable, reference, target: money(reference * months) };
 }
 
 export function housing(h: Home, projectedFgts: number) {

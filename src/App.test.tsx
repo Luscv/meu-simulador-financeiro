@@ -8,7 +8,11 @@ import {
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import App from "./App";
-import { defaults, restore, STORAGE_KEY } from "./state";
+import { defaults, restore, STORAGE_KEY, LEGACY_STORAGE_KEY } from "./state";
+import { snapshotAt } from "./engine/timeline";
+import { monthKey } from "./engine/calendar";
+const savedState = () =>
+  snapshotAt(JSON.parse(localStorage.getItem(STORAGE_KEY)!), monthKey());
 
 beforeEach(() => {
   localStorage.clear();
@@ -40,7 +44,11 @@ describe("interações e persistência", () => {
       target: { value: "5000" },
     });
     expect(homeSalary.value).toBe("8000");
-    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY)!);
+    expect(savedState().salary.gross).toBe(6000);
+    await user.click(
+      screen.getByRole("button", { name: "Aplicar alterações" }),
+    );
+    const saved = savedState();
     expect(saved.stages[0].gross).toBe(5000);
     expect(saved.home.gross).toBe(8000);
     expect(saved.mode).toBe("projection");
@@ -92,13 +100,17 @@ describe("interações e persistência", () => {
       target: { value: "300" },
     });
     await user.click(screen.getByRole("button", { name: "Salvar despesa" }));
-    expect(
-      JSON.parse(localStorage.getItem(STORAGE_KEY)!).expenses.at(-1).amount,
-    ).toBe(300);
+    expect(savedState().expenses.at(-1)!.amount).toBe(300);
     await user.click(
-      screen.getByRole("button", { name: "Excluir Curso de idiomas" }),
+      screen.getByRole("button", { name: "Encerrar Curso de idiomas" }),
     );
-    expect(screen.queryByText("Curso de idiomas")).toBeNull();
+    await user.click(
+      screen.getByRole("button", { name: "Confirmar encerramento" }),
+    );
+    expect(
+      savedState().expenses.some((e) => e.name === "Curso de idiomas"),
+    ).toBe(false);
+    expect(screen.getByText("Despesas encerradas (1)")).toBeTruthy();
   });
   it("adiciona e exclui receitas extras, altera opções e horizonte", async () => {
     const user = userEvent.setup();
@@ -113,20 +125,22 @@ describe("interações e persistência", () => {
       "semiannual",
     );
     await user.click(screen.getByRole("button", { name: "Salvar receita" }));
-    expect(
-      JSON.parse(localStorage.getItem(STORAGE_KEY)!).extras[0].recurrence,
-    ).toBe("semiannual");
+    expect(savedState().extras[0].recurrence).toBe("semiannual");
     await user.click(screen.getByRole("switch", { name: "Investir 13º" }));
     await user.selectOptions(
       screen.getByLabelText("Horizonte da projeção"),
       "60",
     );
     expect(screen.getByText("60 meses")).toBeTruthy();
-    expect(JSON.parse(localStorage.getItem(STORAGE_KEY)!).include13).toBe(
-      false,
+    await user.click(
+      screen.getByRole("button", { name: "Aplicar alterações" }),
+    );
+    expect(savedState().include13).toBe(false);
+    await user.click(
+      screen.getByRole("button", { name: "Encerrar receita Projeto extra" }),
     );
     await user.click(
-      screen.getByRole("button", { name: "Excluir Projeto extra" }),
+      screen.getByRole("button", { name: "Confirmar encerramento" }),
     );
     expect(screen.queryByText("Projeto extra")).toBeNull();
   });
@@ -138,7 +152,7 @@ describe("interações e persistência", () => {
       fgts: 2500,
       horizon: 6,
     };
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(saved));
+    localStorage.setItem(LEGACY_STORAGE_KEY, JSON.stringify(saved));
     const firstRender = render(<App />);
     expect(
       (screen.getByLabelText("Faturamento mensal PJ") as HTMLInputElement)
@@ -166,15 +180,13 @@ describe("interações e persistência", () => {
     fireEvent.change(screen.getByLabelText("Saldo atual do FGTS"), {
       target: { value: "20000" },
     });
-    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY)!);
+    const saved = savedState();
     expect(saved.home.gross).toBe(defaults.home.gross);
     expect(saved.initialBalance).toBe(defaults.initialBalance);
     fireEvent.change(screen.getByLabelText("Entrada em dinheiro"), {
       target: { value: "250000" },
     });
-    expect(JSON.parse(localStorage.getItem(STORAGE_KEY)!).initialBalance).toBe(
-      defaults.initialBalance,
-    );
+    expect(savedState().initialBalance).toBe(defaults.initialBalance);
   });
   it("segue funcional quando o navegador bloqueia localStorage", () => {
     vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {

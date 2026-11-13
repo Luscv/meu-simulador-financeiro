@@ -3115,3 +3115,481 @@ footer > span:last-child,
     justify-self: end;
   }
 }
+
+/* Dated planning, confirmed changes and local data transfer. */
+.data-transfer {
+  margin: 0 0 22px;
+}
+.data-buttons {
+  display: flex;
+  gap: 9px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+.data-transfer > small {
+  display: block;
+  font-size: 11px;
+  color: #7a896e;
+  line-height: 1.7;
+}
+.confirm-settings {
+  padding: 20px;
+  background: #f0f5e9;
+  border: 1px solid #cfdcbe;
+  border-radius: 10px;
+  display: grid;
+  grid-template-columns: 1.5fr 1fr;
+  gap: 14px 22px;
+  margin: 18px 0 23px;
+  scroll-margin-top: 130px;
+}
+.confirm-settings strong {
+  font-size: 13px;
+  color: #4f713d;
+}
+.confirm-settings .field {
+  margin: 0;
+}
+.confirm-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+.pending-dock {
+  position: fixed;
+  right: 23px;
+  bottom: 22px;
+  background: #245e46;
+  color: #fff;
+  z-index: 20;
+  font-size: 12px;
+  padding: 14px 18px;
+  border-radius: 8px;
+  box-shadow: 0 5px 25px #193b322e;
+}
+.term-fields {
+  margin: 16px 0;
+}
+.term-fields + .field {
+  margin-top: 17px;
+}
+.modal .segment {
+  margin-bottom: 18px;
+}
+.modal {
+  max-height: calc(100dvh - 45px);
+  overflow: auto;
+}
+.modal form > .small {
+  margin-bottom: 18px;
+}
+.modal form > .field:not(:first-child) {
+  margin-top: 14px;
+}
+.archived-records {
+  border-top: 1px solid #e7ecdf;
+  padding-top: 15px;
+  margin-top: 8px;
+}
+.archived-records summary,
+.installment-details > summary {
+  font-size: 12px;
+  color: #698656;
+  cursor: pointer;
+  line-height: 1.7;
+}
+.expense-row small {
+  font-size: 10px;
+  color: #7c8e6d;
+  line-height: 1.5;
+}
+.status-badge {
+  display: inline-block;
+  font-size: 10px;
+  line-height: 1.6;
+  color: #768a63;
+  background: #f0f4e8;
+  padding: 3px 7px;
+  border-radius: 4px;
+  width: fit-content;
+}
+.status-badge.overdue {
+  background: #fff1e7;
+  color: #af6a46;
+}
+.emergency-card .segment {
+  margin-bottom: 20px;
+}
+.emergency-card .stat-list > div {
+  font-size: 11px;
+}
+.emergency-card .stat-list strong {
+  font-size: 12px;
+}
+.emergency-goal {
+  border-top: 1px solid #e7eddd;
+  padding: 17px 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  color: #6b8358;
+  font-size: 12px;
+}
+.emergency-goal strong {
+  font-size: 23px;
+  letter-spacing: -0.6px;
+  white-space: nowrap;
+}
+.emergency-card .small {
+  font-size: 11px;
+}
+.debt-summary {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1.5fr;
+  gap: 15px;
+  margin: 20px 0;
+}
+.debt-summary > div {
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  padding: 19px;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+.debt-summary span {
+  font-size: 11px;
+  color: #7e906d;
+}
+.debt-summary strong {
+  font-size: 22px;
+  font-weight: 500;
+  letter-spacing: -0.5px;
+}
+.debt-summary small {
+  font-size: 10px;
+  line-height: 1.6;
+  color: #879872;
+}
+.debts-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  align-items: start;
+}
+.debts-grid .card-heading {
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.debts-grid .card-heading h3 {
+  font-size: 17px;
+}
+.loan-record,
+.invoice-record {
+  border-top: 1px solid #e9eee1;
+  margin-top: 15px;
+  padding-top: 18px;
+}
+.loan-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: start;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.loan-head > div:first-child {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.loan-head strong {
+  font-size: 13px;
+  color: #5b7548;
+}
+.loan-head small {
+  font-size: 11px;
+  line-height: 1.6;
+  color: #849572;
+}
+.loan-record > .small {
+  margin: 13px 0;
+}
+.installment-details {
+  margin-top: 15px;
+}
+.obligation-list {
+  max-height: 350px;
+  overflow-y: auto;
+  margin-top: 14px;
+  padding-right: 4px;
+}
+.obligation-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  border-top: 1px solid #eef1e8;
+  padding: 14px 0;
+}
+.obligation-row > div:first-child {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  flex: 1;
+}
+.obligation-row > div:first-child > strong {
+  font-size: 11px;
+  text-transform: capitalize;
+  color: #6d8659;
+}
+.obligation-row > div:first-child > small {
+  font-size: 10px;
+  color: #9baa86;
+}
+.obligation-row > strong {
+  font-size: 12px;
+  color: #6c845a;
+  white-space: nowrap;
+}
+.obligation-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.obligation-actions .button {
+  font-size: 10px;
+  padding: 7px;
+  white-space: nowrap;
+}
+.button.text-button {
+  background: none;
+  color: #8a9b75;
+  padding: 4px;
+  min-height: 25px;
+  font-size: 10px;
+}
+.revision-note {
+  display: block;
+  margin-top: 5px;
+  font-size: 10px;
+  color: #9a865c;
+}
+.history-panel {
+  margin-top: 35px;
+}
+.history-panel > summary {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  cursor: pointer;
+  color: #718c5b;
+  font-size: 13px;
+}
+.history-panel > summary > span {
+  margin-left: auto;
+  font-size: 11px;
+  color: #8c9c7b;
+}
+.history-panel > div {
+  margin-top: 20px;
+}
+.history-list {
+  max-height: 500px;
+  overflow: auto;
+  margin-top: 18px;
+}
+.history-entry {
+  padding: 15px 0;
+  border-top: 1px solid #e7eddf;
+}
+.history-entry > summary {
+  cursor: pointer;
+}
+.history-entry > summary > span {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 7px;
+  max-width: 95%;
+}
+.history-entry strong {
+  font-size: 12px;
+  overflow-wrap: anywhere;
+  color: #617f4d;
+}
+.history-entry small {
+  font-size: 10px;
+  color: #8d9f7a;
+  line-height: 1.7;
+}
+.history-entry > p {
+  margin-top: 15px;
+  overflow-wrap: anywhere;
+}
+.history-fields {
+  margin-top: 15px;
+}
+.history-fields > div {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 9px;
+  padding: 15px 0;
+  border-top: 1px dashed #e6ebdd;
+}
+.history-fields > div > strong {
+  grid-column: 1/-1;
+}
+.history-fields span {
+  font-size: 10px;
+  color: #90a07d;
+}
+.history-fields pre {
+  margin: 6px 0;
+  font-size: 11px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: #617b4d;
+  max-height: 230px;
+  overflow: auto;
+  background: #f6f8f1;
+  padding: 9px;
+  border-radius: 5px;
+}
+.import-summary {
+  list-style: none;
+  padding: 10px 0;
+  color: #7a8e67;
+  font-size: 12px;
+  line-height: 2;
+}
+.import-summary strong {
+  color: #52783c;
+}
+@media (max-width: 1050px) {
+  .debts-grid {
+    grid-template-columns: 1fr;
+  }
+  .debt-summary > div {
+    padding: 16px;
+  }
+  .debt-summary strong {
+    font-size: 19px;
+  }
+  .debt-summary span {
+    font-size: 10px;
+  }
+  .confirm-settings {
+    grid-template-columns: 1fr;
+  }
+  .confirm-actions {
+    justify-content: flex-start;
+  }
+}
+@media (max-width: 680px) {
+  .data-transfer > small {
+    font-size: 10px;
+  }
+  .data-buttons .button {
+    font-size: 11px;
+    min-height: 38px;
+  }
+  .confirm-settings {
+    padding: 17px;
+    gap: 14px;
+  }
+  .confirm-settings strong {
+    font-size: 12px;
+  }
+  .confirm-settings .small {
+    font-size: 11px;
+  }
+  .confirm-actions {
+    justify-content: space-between;
+  }
+  .confirm-actions .button {
+    font-size: 11px;
+  }
+  .pending-dock {
+    left: 15px;
+    right: 15px;
+    text-align: center;
+    font-size: 11px;
+    bottom: 14px;
+    padding: 12px;
+  }
+  .debt-summary {
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+  .debt-summary > div:last-child {
+    grid-column: 1/-1;
+  }
+  .debt-summary strong {
+    font-size: 23px;
+  }
+  .debt-summary span {
+    font-size: 11px;
+  }
+  .debt-summary small {
+    font-size: 11px;
+  }
+  .debts-grid {
+    gap: 16px;
+  }
+  .obligation-row {
+    gap: 8px;
+  }
+  .obligation-row > strong {
+    font-size: 12px;
+  }
+  .history-panel {
+    padding: 18px;
+  }
+  .history-panel > summary {
+    font-size: 12px;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  .history-panel > summary > span {
+    font-size: 10px;
+  }
+  .history-fields > div {
+    grid-template-columns: 1fr;
+  }
+  .history-fields > div > strong {
+    grid-column: auto;
+  }
+  .emergency-card .stat-list > div {
+    font-size: 11px;
+  }
+  .emergency-goal strong {
+    font-size: 24px;
+  }
+  .expense-row small {
+    font-size: 10px;
+  }
+  footer {
+    padding-bottom: 45px;
+  }
+}
+.sidebar {
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+.data-transfer input[type="file"] {
+  position: absolute;
+}
+@media (max-width: 680px) {
+  .sidebar {
+    overflow: visible;
+  }
+}
+.scheduled-note {
+  padding: 10px 2px 20px;
+  color: #768d61;
+}
+.scheduled-note a {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}

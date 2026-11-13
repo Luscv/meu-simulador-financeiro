@@ -10,6 +10,7 @@ import {
   CheckCheck,
   CircleHelp,
   Coins,
+  CreditCard,
   House,
   LayoutDashboard,
   Leaf,
@@ -27,7 +28,6 @@ import {
 } from "lucide-react";
 import {
   Assumptions,
-  Donut,
   EvolutionChart,
   Metric,
   Modal,
@@ -38,10 +38,21 @@ import {
 } from "./components";
 import { housing, project } from "./engine/calculate";
 import { RULES, SOURCES } from "./engine/rules";
-import { CATEGORIES } from "./engine/types";
-import type { Expense, Extra, Simulation } from "./engine/types";
+import type { Extra } from "./engine/types";
 import { brl, monthLabel, percent } from "./format";
-import { HORIZONS, useSimulation } from "./state";
+import { HORIZONS, useCurrentMonth, useSimulation } from "./state";
+import { monthDate } from "./engine/calendar";
+import { changeEntity } from "./engine/timeline";
+import {
+  CloseForm,
+  DataTransfer,
+  DebtsSection,
+  EmergencyCard,
+  ExpensesCard,
+  HistoryPanel,
+  MonthField,
+  ValidityNote,
+} from "./financial-ui";
 
 const regimeOptions = [
   { value: "CLT" as const, label: "CLT" },
@@ -49,78 +60,19 @@ const regimeOptions = [
 ];
 const id = () => crypto.randomUUID();
 
-function ExpenseEditor({
-  value,
-  onSave,
-  onClose,
-}: {
-  value: Expense;
-  onSave: (e: Expense) => void;
-  onClose: () => void;
-}) {
-  const [draft, setDraft] = useState(value);
-  return (
-    <Modal
-      title={value.name ? "Editar despesa" : "Nova despesa"}
-      onClose={onClose}
-    >
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (draft.name.trim()) onSave({ ...draft, name: draft.name.trim() });
-        }}
-      >
-        <label className="field">
-          Nome da despesa
-          <input
-            autoFocus
-            required
-            maxLength={80}
-            value={draft.name}
-            placeholder="Ex.: Aluguel"
-            onChange={(e) => setDraft({ ...draft, name: e.target.value })}
-          />
-        </label>
-        <label className="field">
-          Categoria
-          <select
-            value={draft.category}
-            onChange={(e) => setDraft({ ...draft, category: e.target.value })}
-          >
-            {CATEGORIES.map((c) => (
-              <option key={c}>{c}</option>
-            ))}
-          </select>
-        </label>
-        <NumberField
-          label="Valor mensal"
-          value={draft.amount}
-          onChange={(amount) => setDraft({ ...draft, amount })}
-        />
-        <div className="modal-actions">
-          <button type="button" className="button secondary" onClick={onClose}>
-            Cancelar
-          </button>
-          <button className="button primary" type="submit">
-            <Check size={16} />
-            Salvar despesa
-          </button>
-        </div>
-      </form>
-    </Modal>
-  );
-}
-
 function ExtraEditor({
+  current,
   value,
   onSave,
   onClose,
 }: {
+  current: string;
   value: Extra;
-  onSave: (e: Extra) => void;
+  onSave: (e: Extra, month: string) => void;
   onClose: () => void;
 }) {
   const [draft, setDraft] = useState(value);
+  const [validFrom, setValidFrom] = useState(current);
   return (
     <Modal
       title={value.name ? "Editar receita extra" : "Nova receita extra"}
@@ -129,7 +81,8 @@ function ExtraEditor({
       <form
         onSubmit={(e) => {
           e.preventDefault();
-          if (draft.name.trim()) onSave({ ...draft, name: draft.name.trim() });
+          if (draft.name.trim())
+            onSave({ ...draft, name: draft.name.trim() }, validFrom);
         }}
       >
         <label className="field">
@@ -164,6 +117,12 @@ function ExtraEditor({
             <option value="annual">Anual</option>
           </select>
         </label>
+        <MonthField
+          label="Alteração válida a partir de"
+          value={validFrom}
+          onChange={setValidFrom}
+        />
+        <ValidityNote month={validFrom} current={current} />
         <div className="modal-actions">
           <button type="button" className="button secondary" onClick={onClose}>
             Cancelar
@@ -179,13 +138,20 @@ function ExtraEditor({
 }
 
 export default function App() {
-  const { state: s, setState, storageOk } = useSimulation();
-  const update = <K extends keyof Simulation>(key: K, value: Simulation[K]) =>
-    setState((previous) => ({ ...previous, [key]: value }));
-  const start = useMemo(() => new Date(), []);
+  const currentMonth = useCurrentMonth();
+  const workspace = useSimulation(currentMonth);
+  const {
+    document: plan,
+    state: s,
+    preview,
+    update,
+    commit,
+    storageOk,
+  } = workspace;
+  const start = useMemo(() => monthDate(currentMonth), [currentMonth]);
   const allRows = useMemo(
-    () => project(s, Math.max(12, s.horizon), start),
-    [s, start],
+    () => project(preview, Math.max(12, s.horizon), start),
+    [preview, s.horizon, start],
   );
   const rows = allRows.slice(0, s.horizon),
     first = rows[0],
@@ -196,13 +162,14 @@ export default function App() {
   const annualVariable = annualRows.reduce((sum, m) => sum + m.variable, 0);
   const home = useMemo(() => housing(s.home, last.fgts), [s.home, last.fgts]);
   const horizon = HORIZONS.find((h) => h.value === s.horizon)!.label;
-  const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
   const [editingExtra, setEditingExtra] = useState<Extra | null>(null);
+  const [closingExtra, setClosingExtra] = useState<Extra | null>(null);
   const [active, setActive] = useState("visao-geral");
   const nav = [
     { key: "visao-geral", label: "Visão geral", icon: LayoutDashboard },
     { key: "renda", label: "Minha renda", icon: BriefcaseBusiness },
     { key: "orcamento", label: "Meu orçamento", icon: Wallet },
+    { key: "dividas", label: "Dívidas", icon: CreditCard },
     { key: "investimentos", label: "Investimentos", icon: TrendingUp },
     { key: "patrimonio", label: "Patrimônio e FGTS", icon: ShieldCheck },
     { key: "imovel", label: "Meu imóvel", icon: House },
@@ -356,6 +323,67 @@ export default function App() {
                 </select>
               </label>
             </div>
+            <DataTransfer
+              document={plan}
+              disabled={workspace.dirty}
+              onImport={workspace.replace}
+            />
+            {plan.history.some(
+              (c) =>
+                c.action === "edit" &&
+                c.effectiveMonth !== null &&
+                c.effectiveMonth > currentMonth,
+            ) && (
+              <p className="small scheduled-note">
+                Há alterações confirmadas com validade futura. Elas entram nas
+                respectivas competências da projeção.{" "}
+                <a href="#historico">Ver histórico.</a>
+              </p>
+            )}
+            {workspace.dirty && (
+              <div
+                id="confirmar-alteracoes"
+                className="confirm-settings"
+                role="region"
+                aria-label="Confirmar alterações financeiras"
+              >
+                <div>
+                  <strong>Prévia de alterações ainda não confirmadas</strong>
+                  <p className="small">
+                    Os resultados acompanham a prévia. Confirme para salvar e
+                    registrar uma alteração completa no histórico.
+                  </p>
+                </div>
+                <MonthField
+                  label="Alterações válidas a partir de"
+                  value={workspace.effectiveMonth}
+                  onChange={workspace.setEffectiveMonth}
+                />
+                <ValidityNote
+                  month={workspace.effectiveMonth}
+                  current={currentMonth}
+                />
+                <div className="confirm-actions">
+                  <button
+                    className="button secondary"
+                    onClick={workspace.discard}
+                  >
+                    Descartar prévia
+                  </button>
+                  <button
+                    className="button primary"
+                    onClick={workspace.confirm}
+                  >
+                    Aplicar alterações
+                  </button>
+                </div>
+              </div>
+            )}
+            {workspace.error && (
+              <div className="alert warning" role="alert">
+                {workspace.error}
+              </div>
+            )}
             <div className="metrics-grid">
               <Metric
                 label="Renda disponível"
@@ -374,7 +402,7 @@ export default function App() {
               <Metric
                 label="Gastos mensais"
                 value={brl(first.spending)}
-                note={<>Fixos + variáveis · {first.days} dias</>}
+                note={<>Fixos, variáveis e dívidas · {first.days} dias</>}
                 icon={<ArrowDownLeft size={18} />}
               />
               <Metric
@@ -432,7 +460,7 @@ export default function App() {
                   <strong>{brl(last.balance)}</strong>
                   <span>saldo investido ao final do período</span>
                 </div>
-                <EvolutionChart rows={rows} initial={s.initialBalance} />
+                <EvolutionChart rows={rows} initial={first.openingBalance} />
                 <div className="chart-footer">
                   <span>
                     <span className="legend-dot green" />
@@ -479,7 +507,8 @@ export default function App() {
                 ) : (
                   <>
                     <p className="muted small">
-                      Etapas consecutivas, a partir deste mês.
+                      Etapas consecutivas. Início salvo:{" "}
+                      {monthLabel(`${s.projectionStart ?? currentMonth}-01`)}.
                     </p>
                     <div className="stages">
                       {s.stages.map((stage, i) => (
@@ -707,78 +736,13 @@ export default function App() {
               description="Gastos planejados e o que sobra para os seus próximos passos."
             />
             <div className="budget-grid">
-              <article className="card fixed-card">
-                <div className="card-heading">
-                  <h3>
-                    <span className="soft-icon">
-                      <Wallet size={17} />
-                    </span>
-                    Gastos fixos
-                  </h3>
-                  <button
-                    className="button secondary small-button"
-                    onClick={() =>
-                      setEditingExpense({
-                        id: id(),
-                        name: "",
-                        category: "Moradia",
-                        amount: 0,
-                      })
-                    }
-                  >
-                    <Plus size={15} />
-                    Adicionar
-                  </button>
-                </div>
-                <div className="fixed-totals">
-                  <strong>
-                    {brl(first.fixed)}
-                    <small>/ mês</small>
-                  </strong>
-                  <span>{brl(first.fixed * 12)} / ano</span>
-                </div>
-                <div className="expense-list">
-                  {s.expenses.map((e) => (
-                    <div className="expense-row" key={e.id}>
-                      <span className="expense-indicator" />
-                      <div>
-                        <strong>{e.name}</strong>
-                        <span>{e.category}</span>
-                      </div>
-                      <strong>{brl(e.amount)}</strong>
-                      <div className="row-actions">
-                        <button
-                          className="icon-button"
-                          aria-label={`Editar ${e.name}`}
-                          onClick={() => setEditingExpense(e)}
-                        >
-                          <Pencil size={14} />
-                        </button>
-                        <button
-                          className="icon-button"
-                          aria-label={`Excluir ${e.name}`}
-                          onClick={() =>
-                            update(
-                              "expenses",
-                              s.expenses.filter((x) => x.id !== e.id),
-                            )
-                          }
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                  {!s.expenses.length && (
-                    <div className="empty-state">
-                      <Wallet size={24} />
-                      <p>Nenhuma despesa fixa ainda.</p>
-                      <span>Adicione os gastos que se repetem todo mês.</span>
-                    </div>
-                  )}
-                </div>
-                <Donut expenses={s.expenses} />
-              </article>
+              <ExpensesCard
+                document={plan}
+                current={currentMonth}
+                fixed={first.fixed}
+                annual={annualRows.reduce((sum, m) => sum + m.fixed, 0)}
+                commit={commit}
+              />
               <div className="budget-right">
                 <article className="card">
                   <div className="card-heading">
@@ -845,23 +809,47 @@ export default function App() {
                       : "Esse valor vira um aporte automático no investimento."}
                   </p>
                 </article>
+                <EmergencyCard
+                  fixed={first.fixed}
+                  daily={first.daily}
+                  months={s.emergencyMonths ?? 6}
+                  current={currentMonth}
+                  onChange={(v) => update("emergencyMonths", v)}
+                />
               </div>
             </div>
             <Assumptions>
               <p>
-                Reserva = renda disponível − gastos fixos − gasto diário × dias
-                reais de cada mês. Os totais anuais somam os próximos 12 meses
-                completos, começando pelo mês atual, e acompanham cada etapa
-                salarial. Despesas permanecem constantes em reais nominais, sem
-                inflação. Benefícios e extras entram na projeção de
-                investimentos, separados do orçamento mensal básico.
+                Reserva = renda disponível − gastos fixos ativos − parcelas de
+                empréstimos − faturas − gasto diário × dias reais de cada mês. A
+                reserva de emergência é apenas uma meta com 30 dias fixos. Não
+                representa outra despesa.
+              </p>
+              <p>
+                Gastos e dívidas respeitam suas competências de início, fim e
+                versões. Projeções recalculadas não representam movimentações
+                financeiras realizadas.
+              </p>
+              <p>
+                Os totais anuais somam os próximos 12 meses completos, começando
+                pelo mês atual, e acompanham cada etapa salarial. Despesas
+                permanecem constantes em reais nominais, sem inflação.
+                Benefícios e extras entram na projeção de investimentos,
+                separados do orçamento mensal básico.
               </p>
             </Assumptions>
           </section>
 
+          <DebtsSection
+            document={plan}
+            current={currentMonth}
+            commit={commit}
+            loanMonthly={first.loans}
+            invoiceMonthly={first.invoices}
+          />
           <section id="investimentos" className="page-section">
             <SectionTitle
-              number="02 / CULTIVAR"
+              number="03 / CULTIVAR"
               title="Dê tempo ao seu dinheiro"
               description={`Sua reserva mensal investida, mês a mês. Horizonte: ${horizon}.`}
               aside={
@@ -954,13 +942,8 @@ export default function App() {
                       </button>
                       <button
                         className="icon-button"
-                        aria-label={`Excluir ${e.name}`}
-                        onClick={() =>
-                          update(
-                            "extras",
-                            s.extras.filter((x) => x.id !== e.id),
-                          )
-                        }
+                        aria-label={`Encerrar receita ${e.name}`}
+                        onClick={() => setClosingExtra(e)}
                       >
                         <Trash2 size={14} />
                       </button>
@@ -979,7 +962,7 @@ export default function App() {
             <div className="investment-summary">
               <div>
                 <span>Saldo inicial</span>
-                <strong>{brl(s.initialBalance)}</strong>
+                <strong>{brl(first.openingBalance)}</strong>
               </div>
               <div>
                 <span>Aportes acumulados</span>
@@ -1000,6 +983,16 @@ export default function App() {
                 <strong>{brl(last.balance)}</strong>
               </div>
             </div>
+            {rows.some(
+              (m) => m.balanceAdjustment !== 0 || m.fgtsAdjustment !== 0,
+            ) && (
+              <div className="alert neutral">
+                Há revisões de saldos informados neste horizonte. Ajuste da
+                reserva: {brl(last.totalBalanceAdjustments)}. São mudanças de
+                premissa, não aportes nem movimentações realizadas; consulte o
+                histórico e os detalhes do saldo na tabela.
+              </div>
+            )}
             {last.totalWithdrawals > 0 && (
               <div className="alert neutral">
                 <ArrowDownLeft size={18} />
@@ -1064,7 +1057,9 @@ export default function App() {
                     <tr>
                       <th>Mês / regime</th>
                       <th>Renda disponível</th>
-                      <th>Gastos</th>
+                      <th>Fixos + variáveis</th>
+                      <th>Parcelas de empréstimos</th>
+                      <th>Faturas</th>
                       <th>Aporte / déficit</th>
                       <th>Extras + benefícios</th>
                       <th>Rendimentos</th>
@@ -1084,7 +1079,9 @@ export default function App() {
                           </span>
                         </th>
                         <td>{brl(m.income)}</td>
-                        <td>{brl(m.spending)}</td>
+                        <td>{brl(m.fixed + m.variable)}</td>
+                        <td>{brl(m.loans)}</td>
+                        <td>{brl(m.invoices)}</td>
                         <td
                           className={m.budget < 0 ? "red-text" : "green-text"}
                         >
@@ -1096,7 +1093,21 @@ export default function App() {
                         <td className={m.uncovered ? "red-text" : ""}>
                           {brl(m.uncovered)}
                         </td>
-                        <td className="balance-cell">{brl(m.balance)}</td>
+                        <td
+                          className="balance-cell"
+                          title={
+                            m.balanceAdjustment
+                              ? `Revisão do saldo informado: ${brl(m.balanceAdjustment)}`
+                              : undefined
+                          }
+                        >
+                          {brl(m.balance)}
+                          {m.balanceAdjustment !== 0 && (
+                            <small className="revision-note">
+                              Revisão: {brl(m.balanceAdjustment)}
+                            </small>
+                          )}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -1136,14 +1147,17 @@ export default function App() {
                 Déficits consomem o saldo após os juros e as entradas do mês. Se
                 as entradas e a reserva forem insuficientes, o restante aparece
                 como déficit não coberto. Saldo inicial + aportes +
-                extras/benefícios + rendimentos − retiradas = saldo final.
+                extras/benefícios + rendimentos − retiradas + revisões de saldo
+                informado = saldo final. Saldos informados são premissas para a
+                projeção; uma revisão futura redefine a referência naquela
+                competência, sem ser tratada como aporte ou transação realizada.
               </p>
             </Assumptions>
           </section>
 
           <section id="patrimonio" className="page-section">
             <SectionTitle
-              number="03 / CONSTRUIR"
+              number="04 / CONSTRUIR"
               title="Uma visão do seu patrimônio"
               description="Sua reserva e seu FGTS, cada um no seu lugar."
             />
@@ -1165,7 +1179,9 @@ export default function App() {
                 <div className="stat-list">
                   <div>
                     <span>Novos depósitos no período</span>
-                    <strong>{brl(last.fgts - s.fgts)}</strong>
+                    <strong>
+                      {brl(rows.reduce((sum, m) => sum + m.fgtsDeposit, 0))}
+                    </strong>
                   </div>
                   <div>
                     <span>FGTS em {horizon}</span>
@@ -1195,7 +1211,7 @@ export default function App() {
                 </div>
                 <EvolutionChart
                   rows={rows}
-                  initial={s.initialBalance + s.fgts}
+                  initial={first.openingBalance + first.openingFgts}
                   wealth
                 />
               </article>
@@ -1221,11 +1237,11 @@ export default function App() {
                   <tbody>
                     <tr>
                       <th scope="row">Saldo inicial</th>
-                      <td>{brl(s.initialBalance)}</td>
+                      <td>{brl(first.openingBalance)}</td>
                       <td>—</td>
-                      <td>{brl(s.fgts)}</td>
+                      <td>{brl(first.openingFgts)}</td>
                       <td className="balance-cell">
-                        {brl(s.initialBalance + s.fgts)}
+                        {brl(first.openingBalance + first.openingFgts)}
                       </td>
                     </tr>
                     {rows.map((m) => (
@@ -1233,7 +1249,20 @@ export default function App() {
                         <th scope="row">{monthLabel(m.date, true)}</th>
                         <td>{brl(m.balance)}</td>
                         <td>{brl(m.fgtsDeposit)}</td>
-                        <td>{brl(m.fgts)}</td>
+                        <td
+                          title={
+                            m.fgtsAdjustment
+                              ? `Revisão do saldo informado: ${brl(m.fgtsAdjustment)}`
+                              : undefined
+                          }
+                        >
+                          {brl(m.fgts)}
+                          {m.fgtsAdjustment !== 0 && (
+                            <small className="revision-note">
+                              Revisão: {brl(m.fgtsAdjustment)}
+                            </small>
+                          )}
+                        </td>
                         <td className="balance-cell">{brl(m.wealth)}</td>
                       </tr>
                     ))}
@@ -1262,7 +1291,7 @@ export default function App() {
 
           <section id="imovel" className="page-section">
             <SectionTitle
-              number="04 / IMAGINAR"
+              number="05 / IMAGINAR"
               title="Seu próximo endereço"
               description="Uma primeira noção da compra, sem mexer no seu orçamento."
               aside={
@@ -1458,6 +1487,7 @@ export default function App() {
             </article>
           </section>
 
+          <HistoryPanel document={plan} />
           <section id="premissas" className="sources-section">
             <details className="sources-details">
               <summary>
@@ -1502,41 +1532,48 @@ export default function App() {
             <span>
               <LockKeyhole size={12} />
               {storageOk
-                ? "Dados salvos apenas neste navegador"
+                ? "Dados neste navegador · exporte para guardar uma cópia"
                 : "Dados apenas nesta sessão; armazenamento bloqueado"}
             </span>
           </footer>
         </main>
       </div>
-      {editingExpense && (
-        <ExpenseEditor
-          key={editingExpense.id}
-          value={editingExpense}
-          onClose={() => setEditingExpense(null)}
-          onSave={(e) => {
-            update(
-              "expenses",
-              s.expenses.some((x) => x.id === e.id)
-                ? s.expenses.map((x) => (x.id === e.id ? e : x))
-                : [...s.expenses, e],
-            );
-            setEditingExpense(null);
-          }}
-        />
-      )}
       {editingExtra && (
         <ExtraEditor
+          current={currentMonth}
           key={editingExtra.id}
           value={editingExtra}
           onClose={() => setEditingExtra(null)}
-          onSave={(e) => {
-            update(
-              "extras",
-              s.extras.some((x) => x.id === e.id)
-                ? s.extras.map((x) => (x.id === e.id ? e : x))
-                : [...s.extras, e],
-            );
-            setEditingExtra(null);
+          onSave={(extra, month) => {
+            if (commit(changeEntity(plan, "extra", extra, month, extra.name)))
+              setEditingExtra(null);
+          }}
+        />
+      )}
+      {workspace.dirty && (
+        <a className="pending-dock" href="#confirmar-alteracoes">
+          Prévia não salva · revisar e confirmar
+        </a>
+      )}
+      {closingExtra && (
+        <CloseForm
+          name={closingExtra.name}
+          current={currentMonth}
+          onClose={() => setClosingExtra(null)}
+          onConfirm={(month) => {
+            if (
+              commit(
+                changeEntity(
+                  plan,
+                  "extra",
+                  null,
+                  month,
+                  closingExtra.name,
+                  closingExtra.id,
+                ),
+              )
+            )
+              setClosingExtra(null);
           }}
         />
       )}

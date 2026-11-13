@@ -24,6 +24,28 @@ export interface Expense {
   name: string;
   category: string;
   amount: number;
+  term?: Term;
+}
+export interface Term {
+  firstMonth: string;
+  months: number;
+  endMonth: string;
+}
+export interface Loan {
+  id: string;
+  name: string;
+  type: "payroll" | "personal";
+  amount: number;
+  firstMonth: string;
+  installments: number;
+  endMonth: string;
+}
+export interface Invoice {
+  id: string;
+  card: string;
+  month: string;
+  amount: number;
+  status: "open" | "paid";
 }
 export interface Extra {
   id: string;
@@ -51,6 +73,65 @@ export interface Simulation {
   fgts: number;
   horizon: number;
   home: Home;
+  loans?: Loan[];
+  invoices?: Invoice[];
+  emergencyMonths?: 6 | 8 | 12;
+  projectionStart?: string;
+}
+export type SettingsKey = Exclude<
+  keyof Simulation,
+  "expenses" | "extras" | "loans" | "invoices"
+>;
+export type EntityKind = "expense" | "extra" | "loan" | "invoice";
+export type ChangeTarget =
+  | SettingsKey
+  | EntityKind
+  | "payment"
+  | "reschedule"
+  | "document";
+export type ChangeAction =
+  | "create"
+  | "edit"
+  | "close"
+  | "payment"
+  | "reschedule"
+  | "import"
+  | "migration"
+  | "initial";
+export interface FieldChange {
+  field: string;
+  before: unknown;
+  after: unknown;
+}
+export interface Change {
+  id: string;
+  recordedAt: string;
+  action: ChangeAction;
+  target: ChangeTarget;
+  itemId: string;
+  itemName: string;
+  effectiveMonth: string | null;
+  before: unknown;
+  after: unknown;
+  fields: FieldChange[];
+}
+export interface PlanDocument {
+  version: 2;
+  createdAt: string;
+  referenceMonth: string;
+  baseline: Simulation;
+  history: Change[];
+}
+export interface Obligation {
+  id: string;
+  kind: "loan" | "invoice";
+  itemId: string;
+  name: string;
+  originalMonth: string;
+  month: string;
+  amount: number;
+  paid: boolean;
+  installment?: number;
 }
 export interface Payroll extends Salary {
   inss: number;
@@ -74,6 +155,9 @@ export interface Month {
   income: number;
   fixed: number;
   variable: number;
+  daily: number;
+  loans: number;
+  invoices: number;
   spending: number;
   budget: number;
   extras: number;
@@ -95,4 +179,9 @@ export interface Month {
   totalInterest: number;
   totalWithdrawals: number;
   totalUncovered: number;
+  openingBalance: number;
+  openingFgts: number;
+  balanceAdjustment: number;
+  fgtsAdjustment: number;
+  totalBalanceAdjustments: number;
 }

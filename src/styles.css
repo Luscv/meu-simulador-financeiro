@@ -3287,11 +3287,48 @@ footer > span:last-child,
 .debts-grid .card-heading h3 {
   font-size: 17px;
 }
-.loan-record,
-.invoice-record {
+.loan-record {
   border-top: 1px solid #e9eee1;
   margin-top: 15px;
   padding-top: 18px;
+}
+.invoice-group {
+  border: 1px solid #e9eee1;
+  border-radius: 12px;
+  margin-top: 14px;
+  overflow: hidden;
+}
+.invoice-group > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 15px;
+  background: #f7f9f2;
+  color: #5b7548;
+  font-size: 13px;
+  font-weight: 600;
+  list-style: none;
+}
+.invoice-group > summary::-webkit-details-marker {
+  display: none;
+}
+.invoice-group > summary > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.invoice-group > summary > svg {
+  flex-shrink: 0;
+  transition: transform 0.2s;
+}
+.invoice-group[open] > summary > svg {
+  transform: rotate(180deg);
+}
+.invoice-list {
+  padding: 0 14px;
+}
+.invoice-list .obligation-row:first-child {
+  border-top: 0;
 }
 .loan-head {
   display: flex;
@@ -3542,6 +3579,15 @@ footer > span:last-child,
   }
   .obligation-row > strong {
     font-size: 12px;
+  }
+  .invoice-list .obligation-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .invoice-list .obligation-actions {
+    grid-column: 1 / -1;
+    flex-direction: row;
+    flex-wrap: wrap;
   }
   .history-panel {
     padding: 18px;

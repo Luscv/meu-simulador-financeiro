@@ -18,7 +18,7 @@ import { defaults } from "./legacy";
 import { addMonths, monthDate, monthKey } from "./engine/calendar";
 import { changeEntity, obligations, snapshotAt } from "./engine/timeline";
 import { project } from "./engine/calculate";
-import type { PlanDocument } from "./engine/types";
+import type { Invoice, PlanDocument } from "./engine/types";
 
 const current = monthKey();
 const stored = (): PlanDocument =>
@@ -167,6 +167,7 @@ describe("fluxos completos do novo planejamento", () => {
       target: { value: "450" },
     });
     await user.click(screen.getByRole("button", { name: "Salvar fatura" }));
+    await user.click(screen.getByText("Nubank"));
     expect(screen.getByText("Vencida · pendente")).toBeTruthy();
     await user.click(
       screen.getByRole("button", {
@@ -187,6 +188,62 @@ describe("fluxos completos do novo planejamento", () => {
     expect(
       project(stored(), 3, monthDate(current)).map((m) => m.invoices),
     ).toEqual([0, 450, 0]);
+  });
+  it("agrupa faturas por banco em caixas independentes sem repetir a identificação nem alterar os dados", async () => {
+    const user = userEvent.setup();
+    let doc = createDocument(defaults);
+    const invoices: Invoice[] = [
+      {
+        id: "next",
+        card: "Nubank",
+        month: addMonths(current, 1),
+        amount: 450,
+        status: "open",
+      },
+      {
+        id: "now",
+        card: "Nubank",
+        month: current,
+        amount: 120,
+        status: "open",
+      },
+      {
+        id: "other",
+        card: "Inter",
+        month: current,
+        amount: 90,
+        status: "open",
+      },
+    ];
+    for (const invoice of invoices)
+      doc = changeEntity(doc, "invoice", invoice, current, invoice.card);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(doc));
+    render(<App />);
+    const before = localStorage.getItem(STORAGE_KEY);
+    const nubank = screen.getByText("Nubank").closest("details")!;
+    const inter = screen.getByText("Inter").closest("details")!;
+    expect(screen.getAllByText("Nubank")).toHaveLength(1);
+    expect(nubank.open).toBe(false);
+    expect(inter.open).toBe(false);
+
+    await user.click(screen.getByText("Nubank"));
+    expect(nubank.open).toBe(true);
+    expect(inter.open).toBe(false);
+    expect(
+      within(nubank)
+        .getAllByRole("button", { name: /^Editar fatura/ })
+        .map((button) => button.getAttribute("aria-label")),
+    ).toEqual([
+      `Editar fatura Nubank ${current}`,
+      `Editar fatura Nubank ${addMonths(current, 1)}`,
+    ]);
+    expect(within(nubank).getByText(/120,00/)).toBeTruthy();
+    expect(within(nubank).getByText(/450,00/)).toBeTruthy();
+    expect(within(nubank).queryByText(/90,00/)).toBeNull();
+
+    await user.click(screen.getByText("Nubank"));
+    expect(nubank.open).toBe(false);
+    expect(localStorage.getItem(STORAGE_KEY)).toBe(before);
   });
   it("não aceita segunda fatura do mesmo cartão/competência", async () => {
     const user = userEvent.setup();
@@ -227,6 +284,7 @@ describe("fluxos completos do novo planejamento", () => {
     );
     localStorage.setItem(STORAGE_KEY, JSON.stringify(doc));
     render(<App />);
+    await user.click(screen.getByText("Meu cartão antigo"));
     await user.click(
       screen.getByRole("button", {
         name: `Editar fatura Meu cartão antigo ${current}`,

@@ -1,6 +1,7 @@
 import { useId, useMemo, useRef, useState } from "react";
 import {
   Check,
+  ChevronDown,
   CreditCard,
   Download,
   History,
@@ -786,6 +787,20 @@ export function DebtsSection({
     [editingInvoice, setEditingInvoice] = useState<Invoice | null>(null),
     [moving, setMoving] = useState<Obligation | null>(null);
   const [invoiceError, setInvoiceError] = useState("");
+  const invoiceGroups = useMemo(() => {
+    const groups = new Map<string, Invoice[]>();
+    for (const invoice of invoices) {
+      const key = invoice.card.trim().toLocaleLowerCase("pt-BR");
+      const group = groups.get(key);
+      if (group) group.push(invoice);
+      else groups.set(key, [invoice]);
+    }
+    return Array.from(groups, ([key, items]) => ({
+      key,
+      card: items[0].card.trim(),
+      invoices: items.sort((a, b) => a.month.localeCompare(b.month)),
+    })).sort((a, b) => a.card.localeCompare(b.card, "pt-BR"));
+  }, [invoices]);
   const status = (o: Obligation) =>
     o.paid
       ? "Paga"
@@ -794,7 +809,7 @@ export function DebtsSection({
         : o.month === current
           ? "Pendente"
           : "A vencer · pendente";
-  const obligationRow = (o: Obligation) => (
+  const obligationRow = (o: Obligation, invoice?: Invoice) => (
     <div className="obligation-row" key={o.id}>
       <div>
         <strong>{labelMonth(o.month)}</strong>
@@ -809,6 +824,19 @@ export function DebtsSection({
       </div>
       <strong>{brl(o.amount)}</strong>
       <div className="obligation-actions">
+        {invoice && (
+          <button
+            className="button text-button"
+            aria-label={`Editar fatura ${invoice.card} ${invoice.month}`}
+            onClick={() => {
+              setInvoiceError("");
+              setEditingInvoice(invoice);
+            }}
+          >
+            <Pencil size={12} />
+            Editar
+          </button>
+        )}
         <button
           className="button secondary small-button"
           onClick={() => commit(confirmPayment(document, o, !o.paid))}
@@ -971,7 +999,7 @@ export function DebtsSection({
                     {installments.filter((o) => !o.paid).length} pendentes)
                   </summary>
                   <div className="obligation-list">
-                    {installments.map(obligationRow)}
+                    {installments.map((o) => obligationRow(o))}
                     {!installments.length && (
                       <p className="small muted">
                         Nenhuma parcela vigente. Consulte as versões no
@@ -1007,28 +1035,22 @@ export function DebtsSection({
           {!invoices.length && (
             <p className="empty-state">Nenhuma fatura cadastrada.</p>
           )}
-          {invoices
-            .sort((a, b) => a.month.localeCompare(b.month))
-            .map((invoice) => (
-              <div className="invoice-record" key={invoice.id}>
-                <div className="loan-head">
-                  <strong>{invoice.card}</strong>
-                  <button
-                    className="icon-button"
-                    aria-label={`Editar fatura ${invoice.card} ${invoice.month}`}
-                    onClick={() => {
-                      setInvoiceError("");
-                      setEditingInvoice(invoice);
-                    }}
-                  >
-                    <Pencil size={14} />
-                  </button>
-                </div>
-                {obligationRow(
-                  schedule.find((o) => o.id === `invoice:${invoice.id}`)!,
+          {invoiceGroups.map((group) => (
+            <details className="invoice-group" key={group.key}>
+              <summary>
+                <span>{group.card}</span>
+                <ChevronDown size={16} aria-hidden="true" />
+              </summary>
+              <div className="invoice-list">
+                {group.invoices.map((invoice) =>
+                  obligationRow(
+                    schedule.find((o) => o.id === `invoice:${invoice.id}`)!,
+                    invoice,
+                  ),
                 )}
               </div>
-            ))}
+            </details>
+          ))}
         </article>
       </div>
       <Assumptions>
